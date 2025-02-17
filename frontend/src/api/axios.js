@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL,
-    timeout: 5000, //  5 seconds
+    timeout: 15000, // Increase timeout to 15 seconds
     headers: {
         'Content-Type': 'application/json',
     }
@@ -25,6 +25,19 @@ api.interceptors.request.use(
     }
 );
 
+// Add request interceptor for adding token
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
 
 // Add response interceptor for debugging
 api.interceptors.response.use(
