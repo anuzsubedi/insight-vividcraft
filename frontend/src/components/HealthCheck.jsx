@@ -1,6 +1,6 @@
 import { Button, Text, VStack, useToast } from "@chakra-ui/react";
 import { useState } from "react";
-import { healthService } from "../services/healthService";
+import { authService } from "../services/authService";
 
 function HealthCheck() {
   const [status, setStatus] = useState(null);
@@ -10,7 +10,7 @@ function HealthCheck() {
   const checkHealth = async () => {
     setIsLoading(true);
     try {
-      const response = await healthService.checkHealth();
+      const response = await authService.checkHealth();
       setStatus(response);
       toast({
         title: "SERVER STATUS",
