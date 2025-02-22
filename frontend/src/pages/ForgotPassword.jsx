@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Box,
   Button,
@@ -11,12 +11,17 @@ import {
   Input,
   Text,
   VStack,
+  HStack,
+  PinInput,
+  PinInputField,
   useToast,
 } from "@chakra-ui/react";
 import { authService } from "../services/authService";
 
 function ForgotPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [resetRequested, setResetRequested] = useState(false);
@@ -55,16 +60,34 @@ function ForgotPassword() {
     }
   };
 
+  const handleVerifyCode = () => {
+    if (code.length === 6) {
+      navigate("/reset-password", {
+        state: {
+          email,
+          code,
+        },
+      });
+    }
+  };
+
   return (
     <Box bg="paper.50" minH="100vh" py={12}>
-      <Container maxW="md" bg="white" p={8} borderRadius="md" boxShadow="sm">
+      <Container maxW="md" bg="white" p={8} {...containerStyles}>
         <VStack spacing={8}>
           <Heading color="paper.500">Reset Password</Heading>
           {!resetRequested ? (
             <Box as="form" onSubmit={handleSubmit} width="100%">
               <VStack spacing={6}>
                 <FormControl isInvalid={error}>
-                  <FormLabel>Email Address</FormLabel>
+                  <FormLabel
+                    fontSize="sm"
+                    fontWeight="bold"
+                    textTransform="uppercase"
+                    letterSpacing="wide"
+                  >
+                    Email Address
+                  </FormLabel>
                   <Input
                     type="email"
                     value={email}
@@ -78,20 +101,64 @@ function ForgotPassword() {
                 <Button
                   type="submit"
                   width="full"
+                  size="lg"
                   isLoading={isLoading}
-                  loadingText="Sending..."
+                  loadingText="SENDING..."
+                  variant="solid"
                 >
-                  Send Reset Code
+                  SEND RESET CODE
                 </Button>
               </VStack>
             </Box>
           ) : (
-            <VStack spacing={4}>
-              <Text textAlign="center">
-                Reset code has been sent to your email.
+            <VStack spacing={6} w="100%">
+              <Text
+                fontSize="lg"
+                color="paper.400"
+                textAlign="center"
+                fontFamily="heading"
+              >
+                Enter the 6-digit code sent to:
               </Text>
-              <Button as={Link} to="/reset-password" width="full">
-                Enter Reset Code
+              <Text
+                color="accent.100"
+                fontSize="lg"
+                fontWeight="bold"
+                textAlign="center"
+                fontFamily="heading"
+              >
+                {email}
+              </Text>
+              <HStack justify="center" spacing={4}>
+                <PinInput
+                  size="lg"
+                  value={code}
+                  onChange={setCode}
+                  type="number"
+                  otp
+                >
+                  {[...Array(6)].map((_, i) => (
+                    <PinInputField
+                      key={i}
+                      bg="paper.50"
+                      borderColor="paper.200"
+                      _hover={{ borderColor: "accent.100" }}
+                      _focus={{
+                        borderColor: "accent.100",
+                        boxShadow: "3px 3px 0 black",
+                      }}
+                    />
+                  ))}
+                </PinInput>
+              </HStack>
+              <Button
+                width="full"
+                size="lg"
+                variant="solid"
+                isDisabled={code.length !== 6}
+                onClick={handleVerifyCode}
+              >
+                VERIFY CODE
               </Button>
             </VStack>
           )}
@@ -103,5 +170,23 @@ function ForgotPassword() {
     </Box>
   );
 }
+
+const containerStyles = {
+  border: "2px solid",
+  borderColor: "paper.400",
+  transform: "translate(-4px, -4px)",
+  boxShadow: "6px 6px 0 black",
+  position: "relative",
+  _before: {
+    content: '""',
+    position: "absolute",
+    top: "15px",
+    left: "15px",
+    right: "-15px",
+    bottom: "-15px",
+    border: "2px solid black",
+    zIndex: -1,
+  },
+};
 
 export default ForgotPassword;

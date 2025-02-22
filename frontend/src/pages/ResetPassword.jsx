@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
   Button,
@@ -19,9 +19,9 @@ import { authService } from "../services/authService";
 
 function ResetPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     email: "",
-    code: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -30,13 +30,23 @@ function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const toast = useToast();
 
+  useEffect(() => {
+    if (location.state?.email && location.state?.code) {
+      setFormData((prev) => ({
+        ...prev,
+        email: location.state.email,
+      }));
+    } else {
+      navigate("/forgot-password");
+    }
+  }, [location.state, navigate]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -47,8 +57,6 @@ function ResetPassword() {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.email) newErrors.email = "Email is required";
-    if (!formData.code) newErrors.code = "Reset code is required";
     if (!formData.newPassword) {
       newErrors.newPassword = "New password is required";
     } else if (formData.newPassword.length < 8) {
@@ -70,13 +78,13 @@ function ResetPassword() {
     try {
       await authService.resetPassword(
         formData.email,
-        formData.code,
+        location.state.code,
         formData.newPassword
       );
 
       toast({
         title: "Success!",
-        description: "Your password has been reset",
+        description: "Your password has been reset successfully",
         status: "success",
         duration: 5000,
         position: "top-right",
@@ -100,38 +108,35 @@ function ResetPassword() {
     <Box bg="paper.50" minH="100vh" py={12}>
       <Container maxW="md" bg="white" p={8} {...containerStyles}>
         <VStack spacing={8}>
-          <Heading color="paper.500">Reset Your Password</Heading>
+          <Heading color="paper.500">Set New Password</Heading>
           <Box as="form" onSubmit={handleSubmit} width="100%">
             <VStack spacing={6}>
-              <FormControl isInvalid={errors.email}>
-                <FormLabel>Email Address</FormLabel>
+              <FormControl>
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  Email
+                </FormLabel>
                 <Input
-                  name="email"
-                  type="email"
                   value={formData.email}
-                  onChange={handleChange}
-                  placeholder="Enter your email"
+                  isReadOnly
+                  bg="paper.100"
                   size="lg"
-                  bg="paper.50"
                 />
-                <FormErrorMessage>{errors.email}</FormErrorMessage>
-              </FormControl>
-
-              <FormControl isInvalid={errors.code}>
-                <FormLabel>Reset Code</FormLabel>
-                <Input
-                  name="code"
-                  value={formData.code}
-                  onChange={handleChange}
-                  placeholder="Enter 6-digit code"
-                  size="lg"
-                  bg="paper.50"
-                />
-                <FormErrorMessage>{errors.code}</FormErrorMessage>
               </FormControl>
 
               <FormControl isInvalid={errors.newPassword}>
-                <FormLabel>New Password</FormLabel>
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  New Password
+                </FormLabel>
                 <InputGroup size="lg">
                   <Input
                     name="newPassword"
@@ -155,7 +160,14 @@ function ResetPassword() {
               </FormControl>
 
               <FormControl isInvalid={errors.confirmPassword}>
-                <FormLabel>Confirm Password</FormLabel>
+                <FormLabel
+                  fontSize="sm"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  letterSpacing="wide"
+                >
+                  Confirm Password
+                </FormLabel>
                 <Input
                   name="confirmPassword"
                   type="password"
@@ -172,10 +184,11 @@ function ResetPassword() {
                 type="submit"
                 width="full"
                 size="lg"
+                variant="solid"
                 isLoading={isLoading}
-                loadingText="Resetting..."
+                loadingText="UPDATING PASSWORD..."
               >
-                Reset Password
+                RESET PASSWORD
               </Button>
             </VStack>
           </Box>
