@@ -5,6 +5,7 @@ export const profileService = {
     async getProfile() {
         try {
             const response = await api.get(ENDPOINTS.PROFILE.GET);
+            console.log('Profile response:', response.data); // Add logging
             return response.data;
         } catch (error) {
             console.error('[GET PROFILE] Error:', error);
@@ -34,6 +35,7 @@ export const profileService = {
     async getProfileByUsername(username) {
         try {
             const response = await api.get(ENDPOINTS.PROFILE.GET_BY_USERNAME(username));
+            console.log('Profile by username response:', response.data); // Add logging
             return response.data;
         } catch (error) {
             console.error('[GET PROFILE BY USERNAME] Error:', error);

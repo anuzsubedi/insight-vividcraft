@@ -1,5 +1,6 @@
 import api from '../api/axios';
 import { ENDPOINTS } from '../api/endpoints';
+import useAuthState from '../hooks/useAuthState';
 
 export const authService = {
     async signup(userData) {
@@ -23,9 +24,10 @@ export const authService = {
             });
             console.log('[LOGIN] Response:', response.data);
 
-            // Store the token in localStorage
+            // Store token and user data
             if (response.data.token) {
                 localStorage.setItem('token', response.data.token);
+                useAuthState.getState().setUser(response.data.user);
             }
 
             return response.data;
@@ -67,5 +69,20 @@ export const authService = {
             newPassword
         });
         return response.data;
+    },
+
+    // Add method to check if token is valid
+    async validateSession() {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return false;
+
+            // Make a request to validate the token
+            const response = await api.get(ENDPOINTS.AUTH.VALIDATE_SESSION);
+            return response.data.isValid;
+        } catch (error) {
+            console.error('[VALIDATE SESSION] Error:', error);
+            return false;
+        }
     }
 };

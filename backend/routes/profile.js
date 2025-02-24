@@ -60,11 +60,41 @@ router.put("/update", verifyToken, async (req, res) => {
     }
 });
 
-// Get user profile by username
+// Helper function to get follower and following counts
+const getFollowCounts = async (userId) => {
+    try {
+        const { count: followerCount, error: followerError } = await supabase
+            .from("follows")
+            .select("follower_id", { count: 'exact', head: true })
+            .eq("following_id", userId);
+
+        const { count: followingCount, error: followingError } = await supabase
+            .from("follows")
+            .select("following_id", { count: 'exact', head: true })
+            .eq("follower_id", userId);
+
+        if (followerError || followingError) {
+            throw new Error("Failed to get follow counts");
+        }
+
+        return {
+            followerCount: followerCount || 0,
+            followingCount: followingCount || 0
+        };
+    } catch (error) {
+        console.error("Count Error:", error);
+        return {
+            followerCount: 0,
+            followingCount: 0
+        };
+    }
+};
+
+// Update the "Get user profile by username" route
 router.get("/:username", verifyToken, async (req, res) => {
     try {
         const { username } = req.params;
-        const requesterId = req.user?.userId; // Optional: will be undefined for non-authenticated requests
+        const requesterId = req.user?.userId;
 
         // Get basic user data
         const { data: user, error } = await supabase
@@ -77,30 +107,13 @@ router.get("/:username", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "User not found" });
         }
 
-        // Initialize social status
-        let socialStatus = {
-            isFollowing: false,
-            isMuted: false,
-            followerCount: 0,
-            followingCount: 0
-        };
+        // Get follow counts using the new helper
+        const counts = await getFollowCounts(user.id);
 
-        // Get follower and following counts
-        const [followerCount, followingCount] = await Promise.all([
-            supabase
-                .from("follows")
-                .select("*", { count: true })
-                .eq("following_id", user.id),
-            supabase
-                .from("follows")
-                .select("*", { count: true })
-                .eq("follower_id", user.id)
-        ]);
+        // Get social status for authenticated users
+        let isFollowing = false;
+        let isMuted = false;
 
-        socialStatus.followerCount = followerCount.count || 0;
-        socialStatus.followingCount = followingCount.count || 0;
-
-        // If request is authenticated, get following and muting status
         if (requesterId) {
             const [followStatus, muteStatus] = await Promise.all([
                 supabase
@@ -117,8 +130,8 @@ router.get("/:username", verifyToken, async (req, res) => {
                     .single()
             ]);
 
-            socialStatus.isFollowing = !!followStatus.data;
-            socialStatus.isMuted = !!muteStatus.data;
+            isFollowing = !!followStatus.data;
+            isMuted = !!muteStatus.data;
         }
 
         return res.status(200).json({
@@ -127,7 +140,10 @@ router.get("/:username", verifyToken, async (req, res) => {
                 displayName: user.display_name,
                 bio: user.bio || "",
                 avatarName: user.avatar_name || "",
-                ...socialStatus
+                followerCount: counts.followerCount,
+                followingCount: counts.followingCount,
+                isFollowing,
+                isMuted
             }
         });
     } catch (error) {
@@ -136,7 +152,7 @@ router.get("/:username", verifyToken, async (req, res) => {
     }
 });
 
-// Get own profile (requires auth)
+// Update the "Get own profile" route
 router.get("/", verifyToken, async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -148,16 +164,20 @@ router.get("/", verifyToken, async (req, res) => {
             .single();
 
         if (error || !user) {
-            console.error("Get Profile Error:", error);
             return res.status(404).json({ error: "User not found" });
         }
+
+        // Get follow counts using the new helper
+        const counts = await getFollowCounts(userId);
 
         return res.status(200).json({
             profile: {
                 username: user.username,
                 displayName: user.display_name,
                 bio: user.bio || "",
-                avatarName: user.avatar_name || ""
+                avatarName: user.avatar_name || "",
+                followerCount: counts.followerCount,
+                followingCount: counts.followingCount
             }
         });
     } catch (error) {
