@@ -2,7 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import { supabase } from "../config/supabaseClient.js";
 import { sendVerificationEmail } from "../utils/emailService.js";
-import { generateToken } from "../middleware/authMiddleware.js";
+import { generateToken, verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -274,6 +274,27 @@ router.post("/reset-password", async (req, res) => {
         return res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Validate session
+router.get("/validate-session", verifyToken, async (req, res) => {
+    try {
+        // If verifyToken middleware passed, the token is valid
+        return res.status(200).json({
+            isValid: true,
+            user: {
+                userId: req.user.userId,
+                username: req.user.username,
+                email: req.user.email
+            }
+        });
+    } catch (error) {
+        console.error('Validate Session Error:', error);
+        return res.status(401).json({
+            isValid: false,
+            error: "Invalid session"
+        });
     }
 });
 

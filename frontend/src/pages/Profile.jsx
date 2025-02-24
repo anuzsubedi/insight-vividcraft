@@ -172,6 +172,20 @@ function Profile() {
               <Text color="paper.400" fontSize="lg">
                 @{profile.username}
               </Text>
+              <HStack spacing={8} justify="center" w="100%">
+                <VStack>
+                  <Text fontSize="2xl" fontWeight="bold">
+                    {profile.followerCount || 0}
+                  </Text>
+                  <Text color="paper.400">Followers</Text>
+                </VStack>
+                <VStack>
+                  <Text fontSize="2xl" fontWeight="bold">
+                    {profile.followingCount || 0}
+                  </Text>
+                  <Text color="paper.400">Following</Text>
+                </VStack>
+              </HStack>
             </VStack>
 
             <Box w="100%">

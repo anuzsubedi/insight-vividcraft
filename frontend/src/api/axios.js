@@ -1,4 +1,5 @@
 import axios from 'axios';
+import useAuthState from '../hooks/useAuthState';
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL,
@@ -69,6 +70,26 @@ api.interceptors.response.use(
         }
 
         console.error('Response Error:', error);
+        return Promise.reject(error);
+    }
+);
+
+// Add response interceptor for handling token expiration
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const originalRequest = error.config;
+
+        // If the error is 401 and we haven't tried to refresh yet
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
+
+            // Clear auth state and redirect to login
+            const logout = useAuthState.getState().logout;
+            logout();
+            window.location.href = '/login';
+        }
+
         return Promise.reject(error);
     }
 );
