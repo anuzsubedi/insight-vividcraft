@@ -17,6 +17,7 @@ import {
 } from "@chakra-ui/react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDownIcon } from "@chakra-ui/icons";
+import { AddIcon } from "@chakra-ui/icons";
 import HealthCheck from "./components/HealthCheck";
 import useAuthState from "./hooks/useAuthState";
 
@@ -67,60 +68,79 @@ function App() {
               INSIGHT
             </Heading>
 
-            <Menu>
-              <MenuButton
-                as={Button}
-                variant="outline"
-                rightIcon={<ChevronDownIcon />}
+            <HStack spacing={4}>
+              <Button
+                as={Link}
+                to="/posts/new"
+                variant="solid"
+                leftIcon={<AddIcon />}
               >
-                <HStack spacing={3}>
-                  {user.avatarName ? (
-                    <Image
-                      src={`/avatars/${user.avatarName}`}
-                      alt="Profile Avatar"
-                      boxSize="32px"
-                      borderRadius="full"
-                      border="2px solid"
-                      borderColor="paper.400"
-                      bg="white"
-                    />
-                  ) : (
-                    <Avatar
-                      size="sm"
-                      name={user.displayName}
-                      bg="accent.100"
-                      color="white"
-                    />
-                  )}
-                  <Text>{user.displayName}</Text>
-                </HStack>
-              </MenuButton>
-              <MenuList
-                border="2px solid"
-                borderColor="paper.400"
-                borderRadius="0"
-                boxShadow="6px 6px 0 black"
-                p={2}
-              >
-                <MenuItem
-                  as={Link}
-                  to="/profile"
-                  borderRadius="0"
-                  _hover={{ bg: "paper.100" }}
+                Create Post
+              </Button>
+
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  variant="outline"
+                  rightIcon={<ChevronDownIcon />}
                 >
-                  My Profile
-                </MenuItem>
-                <Divider my={2} borderColor="paper.200" />
-                <MenuItem
+                  <HStack spacing={3}>
+                    {user.avatarName ? (
+                      <Image
+                        src={`/avatars/${user.avatarName}`}
+                        alt="Profile Avatar"
+                        boxSize="32px"
+                        borderRadius="full"
+                        border="2px solid"
+                        borderColor="paper.400"
+                        bg="white"
+                      />
+                    ) : (
+                      <Avatar
+                        size="sm"
+                        name={user.displayName}
+                        bg="accent.100"
+                        color="white"
+                      />
+                    )}
+                    <Text>{user.displayName}</Text>
+                  </HStack>
+                </MenuButton>
+                <MenuList
+                  border="2px solid"
+                  borderColor="paper.400"
                   borderRadius="0"
-                  color="red.500"
-                  _hover={{ bg: "red.50" }}
-                  onClick={handleLogout}
+                  boxShadow="6px 6px 0 black"
+                  p={2}
                 >
-                  Logout
-                </MenuItem>
-              </MenuList>
-            </Menu>
+                  <MenuItem
+                    as={Link}
+                    to="/profile"
+                    borderRadius="0"
+                    _hover={{ bg: "paper.100" }}
+                  >
+                    My Profile
+                  </MenuItem>
+                  <MenuItem
+                    as={Link}
+                    to="/my-posts"
+                    borderRadius="0"
+                    _hover={{ bg: "paper.100" }}
+                  >
+                    My Posts
+                  </MenuItem>
+                  <Divider my={2} borderColor="paper.200" />
+                  <MenuItem
+                    borderRadius="0"
+                    color="red.500"
+                    _hover={{ bg: "red.50" }}
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </MenuItem>
+                </MenuList>
+              </Menu>
+            </HStack>
           </HStack>
         </Container>
       </Box>
