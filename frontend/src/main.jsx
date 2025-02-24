@@ -9,7 +9,10 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
-import UserProfile from "./pages/UserProfile"; // Update import
+import UserProfile from "./pages/UserProfile";
+import NewPost from "./pages/NewPost";
+import MyPosts from "./pages/MyPosts";
+import EditPost from "./pages/EditPost"; // Add this import
 import AuthProvider from "./components/AuthProvider";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -25,6 +28,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/:username" element={<UserProfile />} />
+            <Route path="/posts/new" element={<NewPost />} />
+            <Route path="/my-posts" element={<MyPosts />} />
+            <Route path="/posts/:slug/edit" element={<EditPost />} />{" "}
+            {/* Add this route */}
           </Routes>
         </AuthProvider>
       </BrowserRouter>

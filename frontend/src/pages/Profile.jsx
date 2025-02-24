@@ -16,10 +16,13 @@ import {
   IconButton,
   useDisclosure,
   Image,
+  Spinner,
+  Badge,
 } from "@chakra-ui/react";
 import { EditIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
 import { profileService } from "../services/profileService";
+import { postService } from "../services/postService";
 import AvatarSelector from "../components/AvatarSelector";
 
 function Profile() {
@@ -29,6 +32,8 @@ function Profile() {
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [posts, setPosts] = useState([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -47,9 +52,34 @@ function Profile() {
     }
   }, [toast]);
 
+  const fetchPosts = useCallback(async () => {
+    try {
+      const response = await postService.getPosts({
+        author: profile?.username,
+        status: "published",
+      });
+      setPosts(response.posts || []);
+    } catch (error) {
+      toast({
+        title: "Error loading posts",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  }, [profile?.username]);
+
   useEffect(() => {
     fetchProfile();
   }, [fetchProfile]);
+
+  useEffect(() => {
+    if (profile?.username) {
+      fetchPosts();
+    }
+  }, [profile?.username, fetchPosts]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -241,6 +271,48 @@ function Profile() {
                 )}
               </FormControl>
             </Box>
+
+            <VStack spacing={4} w="100%" mt={8}>
+              <Heading size="md" alignSelf="start">
+                Published Posts
+              </Heading>
+              {isLoadingPosts ? (
+                <Spinner />
+              ) : posts.length === 0 ? (
+                <Text color="paper.400">No posts yet</Text>
+              ) : (
+                posts.map((post) => (
+                  <Box
+                    key={post.id}
+                    w="100%"
+                    p={4}
+                    border="2px solid"
+                    borderColor="paper.200"
+                    _hover={{
+                      borderColor: "accent.100",
+                      transform: "translate(-2px, -2px)",
+                      boxShadow: "3px 3px 0 black",
+                    }}
+                    transition="all 0.2s"
+                  >
+                    <VStack align="start" spacing={2}>
+                      <Heading size="sm">{post.title}</Heading>
+                      <HStack>
+                        <Badge>{post.type}</Badge>
+                        {post.category && (
+                          <Badge colorScheme="green">
+                            {post.category.name}
+                          </Badge>
+                        )}
+                      </HStack>
+                      <Text noOfLines={2} color="paper.400">
+                        {post.body}
+                      </Text>
+                    </VStack>
+                  </Box>
+                ))
+              )}
+            </VStack>
           </VStack>
         </Box>
       </Container>
