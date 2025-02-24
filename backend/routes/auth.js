@@ -149,7 +149,8 @@ router.post("/login", async (req, res) => {
             user: {
                 username: user.username,
                 email: user.email,
-                displayName: user.display_name
+                displayName: user.display_name,
+                avatarName: user.avatar_name || ""
             }
         });
     } catch (error) {

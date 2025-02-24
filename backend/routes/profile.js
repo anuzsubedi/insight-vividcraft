@@ -17,22 +17,45 @@ router.put("/update", verifyToken, async (req, res) => {
             });
         }
 
-        const { error } = await supabase
+        // Get current user data
+        const { data: currentUser, error: getCurrentError } = await supabase
+            .from("users")
+            .select("bio, avatar_name")
+            .eq("id", userId)
+            .single();
+
+        if (getCurrentError) {
+            console.error("Get Current User Error:", getCurrentError);
+            return res.status(500).json({ error: "Failed to get current user data" });
+        }
+
+        // Update with new values or keep existing ones
+        const { error: updateError, data: updatedUser } = await supabase
             .from("users")
             .update({
-                bio: bio || null,
-                avatar_name: avatarName || null
+                bio: bio !== undefined ? bio : currentUser.bio,
+                avatar_name: avatarName !== undefined ? avatarName : currentUser.avatar_name
             })
-            .eq("id", userId);
+            .eq("id", userId)
+            .select()
+            .single();
 
-        if (error) {
+        if (updateError) {
+            console.error("Update Error:", updateError);
             return res.status(500).json({ error: "Failed to update profile" });
         }
 
         return res.status(200).json({
-            message: "Profile updated successfully"
+            message: "Profile updated successfully",
+            profile: {
+                username: updatedUser.username,
+                displayName: updatedUser.display_name,
+                bio: updatedUser.bio || "",
+                avatarName: updatedUser.avatar_name || ""
+            }
         });
     } catch (error) {
+        console.error("Server Error:", error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -77,6 +100,7 @@ router.get("/", verifyToken, async (req, res) => {
             .single();
 
         if (error || !user) {
+            console.error("Get Profile Error:", error);
             return res.status(404).json({ error: "User not found" });
         }
 
@@ -89,6 +113,7 @@ router.get("/", verifyToken, async (req, res) => {
             }
         });
     } catch (error) {
+        console.error("Server Error:", error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
