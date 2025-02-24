@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profile.js";
 import socialRoutes from "./routes/social.js";
+import postRoutes from "./routes/posts.js";
 
 // Load environment variables
 dotenv.config();
@@ -21,6 +22,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/social", socialRoutes);
+app.use("/api/posts", postRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({
