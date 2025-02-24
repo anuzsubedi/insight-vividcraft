@@ -61,13 +61,15 @@ router.put("/update", verifyToken, async (req, res) => {
 });
 
 // Get user profile by username
-router.get("/:username", async (req, res) => {
+router.get("/:username", verifyToken, async (req, res) => {
     try {
         const { username } = req.params;
+        const requesterId = req.user?.userId; // Optional: will be undefined for non-authenticated requests
 
+        // Get basic user data
         const { data: user, error } = await supabase
             .from("users")
-            .select("username, display_name, bio, avatar_name")
+            .select("id, username, display_name, bio, avatar_name")
             .eq("username", username.toLowerCase())
             .single();
 
@@ -75,15 +77,61 @@ router.get("/:username", async (req, res) => {
             return res.status(404).json({ error: "User not found" });
         }
 
+        // Initialize social status
+        let socialStatus = {
+            isFollowing: false,
+            isMuted: false,
+            followerCount: 0,
+            followingCount: 0
+        };
+
+        // Get follower and following counts
+        const [followerCount, followingCount] = await Promise.all([
+            supabase
+                .from("follows")
+                .select("*", { count: true })
+                .eq("following_id", user.id),
+            supabase
+                .from("follows")
+                .select("*", { count: true })
+                .eq("follower_id", user.id)
+        ]);
+
+        socialStatus.followerCount = followerCount.count || 0;
+        socialStatus.followingCount = followingCount.count || 0;
+
+        // If request is authenticated, get following and muting status
+        if (requesterId) {
+            const [followStatus, muteStatus] = await Promise.all([
+                supabase
+                    .from("follows")
+                    .select("*")
+                    .eq("follower_id", requesterId)
+                    .eq("following_id", user.id)
+                    .single(),
+                supabase
+                    .from("mutes")
+                    .select("*")
+                    .eq("user_id", requesterId)
+                    .eq("muted_id", user.id)
+                    .single()
+            ]);
+
+            socialStatus.isFollowing = !!followStatus.data;
+            socialStatus.isMuted = !!muteStatus.data;
+        }
+
         return res.status(200).json({
             profile: {
                 username: user.username,
                 displayName: user.display_name,
                 bio: user.bio || "",
-                avatarName: user.avatar_name || ""
+                avatarName: user.avatar_name || "",
+                ...socialStatus
             }
         });
     } catch (error) {
+        console.error("Profile Error:", error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
