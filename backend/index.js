@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profile.js";
 import socialRoutes from "./routes/social.js";
 import postRoutes from "./routes/posts.js";
+import categoriesRoutes from "./routes/categories.js";
 
 // Load environment variables
 dotenv.config();
@@ -23,6 +24,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/social", socialRoutes);
 app.use("/api/posts", postRoutes);
+app.use("/api/categories", categoriesRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({

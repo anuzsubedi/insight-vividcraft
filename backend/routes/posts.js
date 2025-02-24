@@ -4,126 +4,151 @@ import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Create or update tags and return their IDs
-async function getTagIds(tagNames) {
-    const tags = [];
-    for (const name of tagNames) {
-        const normalizedName = name.toLowerCase().trim();
-        // Try to get existing tag
-        let { data: tag } = await supabase
-            .from('tags')
+async function generateUniqueSlug(title) {
+    const baseSlug = title
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+        const { data } = await supabase
+            .from('posts')
             .select('id')
-            .eq('name', normalizedName)
+            .eq('slug', slug)
             .single();
 
-        if (!tag) {
-            // Create new tag if it doesn't exist
-            const { data: newTag, error } = await supabase
-                .from('tags')
-                .insert({ name: normalizedName })
-                .select('id')
-                .single();
-
-            if (error) throw error;
-            tag = newTag;
-        }
-        tags.push(tag.id);
+        if (!data) break;
+        slug = `${baseSlug}-${counter}`;
+        counter++;
     }
-    return tags;
+
+    return slug;
 }
 
-// Create a new post
 router.post("/", verifyToken, async (req, res) => {
     try {
-        const {
-            title,
-            body,
-            type,
-            categoryId,
-            tags,
-            status,
-            scheduledFor
-        } = req.body;
+        const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
+        const authorId = req.user.userId;
 
-        // Validate required fields
-        if (!title || !body || !type || !categoryId || !status) {
+        if (!title || !type || !status) {
             return res.status(400).json({ error: "Missing required fields" });
         }
 
-        // Validate post type
-        if (!['article', 'post'].includes(type)) {
-            return res.status(400).json({ error: "Invalid post type" });
-        }
-
-        // Validate status
-        if (!['draft', 'published', 'scheduled'].includes(status)) {
-            return res.status(400).json({ error: "Invalid status" });
-        }
-
-        // Validate scheduled time if status is scheduled
-        if (status === 'scheduled' && !scheduledFor) {
-            return res.status(400).json({ error: "Scheduled time is required for scheduled posts" });
-        }
-
-        // Create post
         const { data: post, error: postError } = await supabase
             .from('posts')
             .insert({
                 title,
+                slug: await generateUniqueSlug(title),
                 body,
                 type,
                 category_id: categoryId,
-                author_id: req.user.userId,
+                author_id: authorId,
                 status,
-                scheduled_for: scheduledFor,
-                published_at: status === 'published' ? new Date() : null
+                scheduled_for: status === 'scheduled' ? scheduledFor : null,
+                published_at: status === 'published' ? new Date().toISOString() : null
             })
             .select()
             .single();
 
-        if (postError) throw postError;
-
-        // Handle tags if provided
-        if (tags && tags.length > 0) {
-            const tagIds = await getTagIds(tags);
-            const postTags = tagIds.map(tagId => ({
-                post_id: post.id,
-                tag_id: tagId
-            }));
-
-            const { error: tagError } = await supabase
-                .from('post_tags')
-                .insert(postTags);
-
-            if (tagError) throw tagError;
+        if (postError || !post) {
+            return res.status(500).json({ error: "Failed to create post" });
         }
 
-        return res.status(201).json({ message: "Post created successfully", post });
+        if (tags && tags.length > 0 && post.id) {
+            try {
+                const tagIds = [];
+                for (const tag of tags) {
+                    const { data: existingTag } = await supabase
+                        .from('tags')
+                        .select('id')
+                        .eq('name', tag.toLowerCase())
+                        .single();
+
+                    if (existingTag) {
+                        tagIds.push(existingTag.id);
+                    } else {
+                        const { data: newTag } = await supabase
+                            .from('tags')
+                            .insert({ name: tag.toLowerCase() })
+                            .select('id')
+                            .single();
+
+                        if (newTag) {
+                            tagIds.push(newTag.id);
+                        }
+                    }
+                }
+
+                if (tagIds.length > 0) {
+                    await supabase
+                        .from('post_tags')
+                        .insert(tagIds.map(tagId => ({
+                            post_id: post.id,
+                            tag_id: tagId
+                        })));
+                }
+            } catch (tagError) {
+                // Silently handle tag processing errors
+            }
+        }
+
+        const { data: completePost, error: fetchError } = await supabase
+            .from('posts')
+            .select(`
+                *,
+                author:users(id, username, display_name),
+                tags:post_tags(tag:tags(id, name))
+            `)
+            .eq('id', post.id)
+            .single();
+
+        if (fetchError) {
+            return res.status(201).json({
+                message: "Post created successfully",
+                post
+            });
+        }
+
+        return res.status(201).json({
+            message: "Post created successfully",
+            post: completePost
+        });
+
     } catch (error) {
-        console.error("Create post error:", error);
         return res.status(500).json({ error: "Failed to create post" });
     }
 });
 
-// Update a post
-router.put("/:id", verifyToken, async (req, res) => {
-    try {
-        const postId = req.params.id;
-        const {
-            title,
-            body,
-            type,
-            categoryId,
-            tags,
-            status,
-            scheduledFor
-        } = req.body;
+// In the PUT /:slug route, update the validation and scheduling logic:
 
-        // Check if post exists and belongs to user
+router.put("/:slug", verifyToken, async (req, res) => {
+    try {
+        const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
+        const slug = req.params.slug;
+
+        // Validate scheduled posts have a future date
+        if (status === 'scheduled') {
+            if (!scheduledFor) {
+                return res.status(400).json({
+                    error: "Scheduled posts must have a scheduled_for date"
+                });
+            }
+
+            if (new Date(scheduledFor) <= new Date()) {
+                return res.status(400).json({
+                    error: "Scheduled date must be in the future"
+                });
+            }
+        }
+
         const { data: existingPost, error: fetchError } = await supabase
             .from('posts')
             .select('*')
-            .eq('id', postId)
+            .eq('slug', slug)
             .eq('author_id', req.user.userId)
             .single();
 
@@ -131,71 +156,187 @@ router.put("/:id", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
-        if (existingPost.status === 'deleted') {
-            return res.status(400).json({ error: "Cannot update deleted post" });
-        }
-
-        // Update post
         const updates = {
             title: title || existingPost.title,
             body: body || existingPost.body,
             type: type || existingPost.type,
             category_id: categoryId || existingPost.category_id,
             status: status || existingPost.status,
-            scheduled_for: scheduledFor || existingPost.scheduled_for,
-            published_at: status === 'published' && existingPost.status !== 'published'
-                ? new Date()
-                : existingPost.published_at
+            scheduled_for: status === 'scheduled' ? scheduledFor : null,
+            published_at: status === 'published' ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString()
         };
 
-        const { data: updatedPost, error: updateError } = await supabase
+        if (title && title !== existingPost.title) {
+            updates.slug = await generateUniqueSlug(title);
+        }
+
+        const { data: post, error: updateError } = await supabase
             .from('posts')
             .update(updates)
-            .eq('id', postId)
-            .select()
+            .eq('id', existingPost.id)
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name),
+                tags:post_tags (tag:tags (id, name))
+            `)
             .single();
 
-        if (updateError) throw updateError;
+        if (updateError) {
+            return res.status(500).json({ error: "Failed to update post" });
+        }
 
-        // Update tags if provided
+        // Handle tags update
         if (tags) {
-            // Remove existing tags
             await supabase
                 .from('post_tags')
                 .delete()
-                .eq('post_id', postId);
+                .eq('post_id', existingPost.id);
 
-            // Add new tags
             if (tags.length > 0) {
-                const tagIds = await getTagIds(tags);
-                const postTags = tagIds.map(tagId => ({
-                    post_id: postId,
-                    tag_id: tagId
-                }));
+                const tagPromises = tags.map(tag => {
+                    return supabase
+                        .from('tags')
+                        .select('id')
+                        .eq('name', tag.toLowerCase())
+                        .single()
+                        .then(async ({ data: existingTag }) => {
+                            if (!existingTag) {
+                                const { data: newTag } = await supabase
+                                    .from('tags')
+                                    .insert({ name: tag.toLowerCase() })
+                                    .select('id')
+                                    .single();
+                                return newTag.id;
+                            }
+                            return existingTag.id;
+                        });
+                });
+
+                const tagIds = await Promise.all(tagPromises);
 
                 await supabase
                     .from('post_tags')
-                    .insert(postTags);
+                    .insert(tagIds.map(tagId => ({
+                        post_id: existingPost.id,
+                        tag_id: tagId
+                    })));
             }
         }
 
-        return res.status(200).json({ message: "Post updated successfully", post: updatedPost });
+        return res.status(200).json({
+            message: "Post updated successfully",
+            post
+        });
+
     } catch (error) {
-        console.error("Update post error:", error);
+        console.error('Update post error:', error);
         return res.status(500).json({ error: "Failed to update post" });
     }
 });
 
-// Soft delete a post
-router.delete("/:id", verifyToken, async (req, res) => {
+router.get("/:slug", async (req, res) => {
     try {
-        const postId = req.params.id;
+        const { data: post, error } = await supabase
+            .from('posts')
+            .select(`
+                *,
+                author:users(id, username, display_name),
+                category:categories(id, name),
+                tags:post_tags(tag:tags(id, name))
+            `)
+            .eq('slug', req.params.slug)
+            .single();
 
-        // Check if post exists and belongs to user
+        if (error || !post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        return res.status(200).json({ post });
+    } catch (error) {
+        return res.status(500).json({ error: "Failed to fetch post" });
+    }
+});
+
+// Update the GET posts route with better error handling
+router.get("/", async (req, res, next) => {
+    try {
+        // If requesting "my posts", require authentication
+        if (req.query.author === 'me') {
+            console.log('Authenticating request for my posts...');
+            return verifyToken(req, res, () => {
+                console.log('Authentication successful, continuing...');
+                next();
+            });
+        }
+        next();
+    } catch (error) {
+        console.error("Auth middleware error:", error);
+        return res.status(401).json({ error: "Authentication failed" });
+    }
+}, async (req, res) => {
+    try {
+        console.log('Processing posts request:', {
+            query: req.query,
+            user: req.user
+        });
+
+        const {
+            author,
+            category,
+            tag,
+            status = 'published',
+            page = 1,
+            limit = 10
+        } = req.query;
+
+        // Build the base query
+        let query = supabase
+            .from('posts')
+            .select(`
+                *,
+                users!posts_author_id_fkey (id, username, display_name),
+                categories!posts_category_id_fkey (id, name),
+                post_tags (tags (id, name))
+            `);
+
+        // Add filters
+        if (author === 'me' && req.user) {
+            console.log('Filtering by author ID:', req.user.userId);
+            query = query.eq('author_id', req.user.userId);
+        }
+
+        if (status !== 'all') {
+            query = query.eq('status', status);
+        }
+
+        // Execute query
+        const { data: posts, error } = await query;
+
+        if (error) {
+            console.error('Supabase query error:', error);
+            throw error;
+        }
+
+        console.log(`Found ${posts?.length || 0} posts`);
+        return res.status(200).json({ posts: posts || [] });
+
+    } catch (error) {
+        console.error('Posts endpoint error:', error);
+        return res.status(500).json({
+            error: "Failed to fetch posts",
+            details: error.message
+        });
+    }
+});
+
+router.delete("/:slug", verifyToken, async (req, res) => {
+    try {
         const { data: post, error: fetchError } = await supabase
             .from('posts')
-            .select('*')
-            .eq('id', postId)
+            .select('id')
+            .eq('slug', req.params.slug)
             .eq('author_id', req.user.userId)
             .single();
 
@@ -203,150 +344,102 @@ router.delete("/:id", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
-        if (post.status === 'deleted') {
-            return res.status(400).json({ error: "Post already deleted" });
-        }
-
-        // Soft delete the post
         const { error: deleteError } = await supabase
             .from('posts')
-            .update({
-                status: 'deleted',
-                deleted_at: new Date()
-            })
-            .eq('id', postId);
+            .delete()
+            .eq('id', post.id);
 
-        if (deleteError) throw deleteError;
+        if (deleteError) {
+            return res.status(500).json({ error: "Failed to delete post" });
+        }
 
         return res.status(200).json({ message: "Post deleted successfully" });
     } catch (error) {
-        console.error("Delete post error:", error);
         return res.status(500).json({ error: "Failed to delete post" });
     }
 });
 
-// Get all posts for a user (with filters)
-router.get("/", verifyToken, async (req, res) => {
+router.post("/:slug/publish", verifyToken, async (req, res) => {
     try {
-        const {
-            status,
-            type,
-            categoryId,
-            page = 1,
-            limit = 10
-        } = req.query;
-
-        let query = supabase
-            .from('posts')
-            .select(`
-                *,
-                category:categories(name),
-                tags:post_tags(tag:tags(name))
-            `)
-            .eq('author_id', req.user.userId)
-            .neq('status', 'deleted')
-            .order('created_at', { ascending: false });
-
-        // Apply filters
-        if (status) query = query.eq('status', status);
-        if (type) query = query.eq('type', type);
-        if (categoryId) query = query.eq('category_id', categoryId);
-
-        // Apply pagination
-        const from = (page - 1) * limit;
-        const to = from + limit - 1;
-        query = query.range(from, to);
-
-        const { data: posts, error } = await query;
-
-        if (error) throw error;
-
-        return res.status(200).json({ posts });
-    } catch (error) {
-        console.error("Fetch posts error:", error);
-        return res.status(500).json({ error: "Failed to fetch posts" });
-    }
-});
-
-// Publish a scheduled post
-router.post("/:id/publish", verifyToken, async (req, res) => {
-    try {
-        const postId = req.params.id;
-
-        // Check if post exists and belongs to user
         const { data: post, error: fetchError } = await supabase
             .from('posts')
             .select('*')
-            .eq('id', postId)
+            .eq('slug', req.params.slug)
             .eq('author_id', req.user.userId)
-            .eq('status', 'scheduled')
             .single();
 
         if (fetchError || !post) {
-            return res.status(404).json({ error: "Scheduled post not found" });
+            return res.status(404).json({ error: "Post not found" });
         }
 
-        // Publish the post
-        const { data: publishedPost, error: publishError } = await supabase
+        const { error: updateError } = await supabase
             .from('posts')
             .update({
                 status: 'published',
-                published_at: new Date(),
+                published_at: new Date().toISOString(),
                 scheduled_for: null
             })
-            .eq('id', postId)
-            .select()
-            .single();
+            .eq('id', post.id);
 
-        if (publishError) throw publishError;
+        if (updateError) {
+            return res.status(500).json({ error: "Failed to publish post" });
+        }
 
-        return res.status(200).json({
-            message: "Post published successfully",
-            post: publishedPost
-        });
+        return res.status(200).json({ message: "Post published successfully" });
     } catch (error) {
-        console.error("Publish post error:", error);
         return res.status(500).json({ error: "Failed to publish post" });
     }
 });
 
-// Publish all due scheduled posts (for cron job)
-router.post("/scheduled/publish-due", async (req, res) => {
-    try {
-        const now = new Date();
 
-        // Get all due scheduled posts
-        const { data: duePosts, error: fetchError } = await supabase
+
+// Get posts scheduled for publication
+router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
+    try {
+        const now = new Date().toISOString();
+
+        // Get all posts that are scheduled and due for publication
+        const { data: posts, error } = await supabase
             .from('posts')
-            .select('id')
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name)
+            `)
             .eq('status', 'scheduled')
             .lte('scheduled_for', now);
 
-        if (fetchError) throw fetchError;
-
-        if (!duePosts || duePosts.length === 0) {
-            return res.status(200).json({ message: "No due posts to publish" });
+        if (error) {
+            throw error;
         }
 
-        // Publish all due posts
-        const { error: publishError } = await supabase
-            .from('posts')
-            .update({
-                status: 'published',
-                published_at: now,
-                scheduled_for: null
-            })
-            .in('id', duePosts.map(post => post.id));
+        // Update all due posts to published status
+        if (posts && posts.length > 0) {
+            const { error: updateError } = await supabase
+                .from('posts')
+                .update({
+                    status: 'published',
+                    published_at: now,
+                    scheduled_for: null
+                })
+                .in('id', posts.map(p => p.id));
 
-        if (publishError) throw publishError;
+            if (updateError) {
+                throw updateError;
+            }
+        }
 
         return res.status(200).json({
-            message: `Successfully published ${duePosts.length} posts`,
-            publishedCount: duePosts.length
+            message: `${posts?.length || 0} posts published`,
+            posts: posts || []
         });
+
     } catch (error) {
-        console.error("Publish due posts error:", error);
-        return res.status(500).json({ error: "Failed to publish due posts" });
+        console.error('Publish scheduled posts error:', error);
+        return res.status(500).json({
+            error: "Failed to publish scheduled posts",
+            details: error.message
+        });
     }
 });
 
