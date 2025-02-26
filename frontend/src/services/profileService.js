@@ -20,6 +20,9 @@ export const profileService = {
 
             // Merge current data with updates
             const updateData = {
+                displayName: data.displayName ?? currentProfile.profile.displayName,
+                username: data.username ?? currentProfile.profile.username,
+                email: data.email ?? currentProfile.profile.email,
                 bio: data.bio ?? currentProfile.profile.bio,
                 avatarName: data.avatarName ?? currentProfile.profile.avatarName
             };

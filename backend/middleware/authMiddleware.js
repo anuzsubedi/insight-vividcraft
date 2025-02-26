@@ -23,7 +23,7 @@ export const verifyToken = async (req, res, next) => {
         // Verify user exists in database
         const { data: user, error } = await supabase
             .from('users')
-            .select('id, username, email')
+            .select('id, username, email, display_name')
             .eq('id', decoded.userId)
             .single();
 
@@ -39,7 +39,8 @@ export const verifyToken = async (req, res, next) => {
         req.user = {
             userId: user.id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            displayName: user.display_name
         };
 
         console.log('Auth successful for user:', user.username);
