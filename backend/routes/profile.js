@@ -7,7 +7,7 @@ const router = express.Router();
 // Update user profile (bio and avatar)
 router.put("/update", verifyToken, async (req, res) => {
     try {
-        const { displayName, username, bio, avatarName } = req.body;
+        const { bio, avatarName } = req.body;
         const userId = req.user.userId;
 
         // Validate avatar name format if provided
@@ -20,7 +20,7 @@ router.put("/update", verifyToken, async (req, res) => {
         // Get current user data
         const { data: currentUser, error: getCurrentError } = await supabase
             .from("users")
-            .select("bio, avatar_name, display_name, username")
+            .select("bio, avatar_name")
             .eq("id", userId)
             .single();
 
@@ -33,8 +33,6 @@ router.put("/update", verifyToken, async (req, res) => {
         const { error: updateError, data: updatedUser } = await supabase
             .from("users")
             .update({
-                display_name: displayName !== undefined ? displayName : currentUser.display_name,
-                username: username !== undefined ? username.toLowerCase() : currentUser.username,
                 bio: bio !== undefined ? bio : currentUser.bio,
                 avatar_name: avatarName !== undefined ? avatarName : currentUser.avatar_name
             })
@@ -51,7 +49,7 @@ router.put("/update", verifyToken, async (req, res) => {
             message: "Profile updated successfully",
             profile: {
                 username: updatedUser.username,
-                displayName: updatedUser.display_name || currentUser.display_name,
+                displayName: updatedUser.display_name,
                 bio: updatedUser.bio || "",
                 avatarName: updatedUser.avatar_name || ""
             }
