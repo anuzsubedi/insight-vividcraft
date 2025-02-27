@@ -124,7 +124,6 @@ router.post("/", verifyToken, async (req, res) => {
 });
 
 // In the PUT /:slug route, update the validation and scheduling logic:
-
 router.put("/:slug", verifyToken, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
@@ -391,8 +390,6 @@ router.post("/:slug/publish", verifyToken, async (req, res) => {
     }
 });
 
-
-
 // Get posts scheduled for publication
 router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
     try {
@@ -438,6 +435,54 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
         console.error('Publish scheduled posts error:', error);
         return res.status(500).json({
             error: "Failed to publish scheduled posts",
+            details: error.message
+        });
+    }
+});
+
+// GET Feed - Retrieve blog posts with filtering options
+router.get("/feed", async (req, res) => {
+    try {
+        const { filter = "recent", limit = 10, page = 1, category, tag } = req.query;
+        const offset = (page - 1) * limit;
+
+        let query = supabase
+            .from("posts")
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name),
+                tags:post_tags(tag:tags(id, name))
+            `)
+            .eq("status", "published")
+            .order("published_at", { ascending: false }) // Default: Most recent first
+            .range(offset, offset + limit - 1);
+
+        if (filter === "trending") {
+            // Add logic for trending posts (if there’s an engagement metric)
+            query = query.order("views", { ascending: false }); // Example sorting by views
+        }
+
+        if (category) {
+            query = query.eq("category_id", category);
+        }
+
+        if (tag) {
+            query = query.contains("tags.tag.name", [tag]); // Filter by tags
+        }
+
+        const { data: posts, error } = await query;
+
+        if (error) {
+            throw error;
+        }
+
+        return res.status(200).json({ posts: posts || [] });
+
+    } catch (error) {
+        console.error("Feed endpoint error:", error);
+        return res.status(500).json({
+            error: "Failed to fetch feed",
             details: error.message
         });
     }
