@@ -1,6 +1,7 @@
-import { Box, Container, VStack, Heading, Text, Button, Image } from "@chakra-ui/react";
+import { Box, Container, VStack, Heading, Text, Button } from "@chakra-ui/react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronDownIcon } from "@chakra-ui/icons";
+import Logo from "../components/Logo";
 
 export default function NotFound() {
   const location = useLocation();
@@ -35,14 +36,7 @@ export default function NotFound() {
             <Text fontWeight="bold" fontSize="xl">404</Text>
           </Box>
 
-          <Image
-            src="/public/vite.svg"
-            alt="404"
-            w="150px"
-            h="150px"
-            opacity="0.8"
-            transform="rotate(10deg)"
-          />
+          <Logo size="6xl" />
 
           <VStack spacing={4} textAlign="center">
             <Heading size="2xl" color="paper.800">

@@ -76,7 +76,7 @@ function Profile() {
       
       const response = await profileService.getProfileByUsername(username);
       if (!response.profile) {
-        navigate('/not-found', { replace: true });
+        navigate('/user-not-found', { replace: true });
         return;
       }
       
@@ -97,18 +97,11 @@ function Profile() {
       setIsLoading(false);
     } catch (error) {
       if (error.response?.status === 404) {
-        navigate('/not-found', { replace: true });
-      } else {
-        toast({
-          title: "Error loading profile",
-          description: error.response?.data?.error || error.message,
-          status: "error",
-          duration: 3000,
-        });
+        navigate('/user-not-found', { replace: true });
       }
       setIsLoading(false);
     }
-  }, [username, user, toast, navigate]);
+  }, [username, user, navigate]);
 
   const fetchPosts = useCallback(async () => {
     try {
