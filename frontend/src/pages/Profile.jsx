@@ -75,6 +75,11 @@ function Profile() {
       if (!username) return;
       
       const response = await profileService.getProfileByUsername(username);
+      if (!response.profile) {
+        navigate('/not-found', { replace: true });
+        return;
+      }
+      
       setProfile(response.profile);
       setEditedBio(response.profile.bio || "");
       setEditedDisplayName(response.profile.displayName || "");
@@ -91,15 +96,19 @@ function Profile() {
       
       setIsLoading(false);
     } catch (error) {
-      toast({
-        title: "Error loading profile",
-        description: error.message,
-        status: "error",
-        duration: 3000,
-      });
+      if (error.response?.status === 404) {
+        navigate('/not-found', { replace: true });
+      } else {
+        toast({
+          title: "Error loading profile",
+          description: error.response?.data?.error || error.message,
+          status: "error",
+          duration: 3000,
+        });
+      }
       setIsLoading(false);
     }
-  }, [username, user, toast]);
+  }, [username, user, toast, navigate]);
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -154,9 +163,9 @@ function Profile() {
         username: response.profile.username
       }));
       
-      // If username was changed and successful, navigate to the new profile URL
+      // Only navigate if the update was successful and username was changed
       if (editMode === 'username' && response.profile.username !== username) {
-        navigate(`/user/${response.profile.username}`);
+        navigate(`/user/${response.profile.username}`, { replace: true });
       }
       
       setEditMode(null);

@@ -9,6 +9,9 @@ export const profileService = {
             return response.data;
         } catch (error) {
             console.error('[GET PROFILE] Error:', error);
+            if (error.response?.status === 404) {
+                throw new Error("Profile not found");
+            }
             throw error;
         }
     },
@@ -24,21 +27,24 @@ export const profileService = {
 
             const response = await api.put(ENDPOINTS.PROFILE.UPDATE, updateData);
             
-            // Update auth state with new user data
+            // Update auth state with new user data if available
             const currentUser = useAuthState.getState().user;
-            if (currentUser) {
+            if (currentUser && response.data.profile) {
                 useAuthState.getState().setUser({
                     ...currentUser,
-                    username: data.username || currentUser.username,
-                    displayName: data.displayName || currentUser.displayName,
-                    bio: data.bio || currentUser.bio,
-                    avatarName: data.avatarName || currentUser.avatarName
+                    username: response.data.profile.username || currentUser.username,
+                    displayName: response.data.profile.displayName || currentUser.displayName,
+                    bio: response.data.profile.bio || currentUser.bio,
+                    avatarName: response.data.profile.avatarName || currentUser.avatarName
                 });
             }
             
             return response.data;
         } catch (error) {
             console.error('[UPDATE PROFILE] Error:', error);
+            if (error.response?.status === 404) {
+                throw new Error("Profile not found");
+            }
             throw error;
         }
     },
@@ -49,6 +55,9 @@ export const profileService = {
             return response.data;
         } catch (error) {
             console.error('[GET PROFILE BY USERNAME] Error:', error);
+            if (error.response?.status === 404) {
+                throw new Error("User not found");
+            }
             throw error;
         }
     }

@@ -26,6 +26,9 @@ router.put("/update", verifyToken, async (req, res) => {
 
         if (getCurrentError) {
             console.error("Get Current User Error:", getCurrentError);
+            if (getCurrentError.code === 'PGRST116') { // No rows found
+                return res.status(404).json({ error: "Profile not found" });
+            }
             return res.status(500).json({ error: "Failed to get current user data" });
         }
 
@@ -41,7 +44,7 @@ router.put("/update", verifyToken, async (req, res) => {
                 return res.status(400).json({ error: "Username is already taken" });
             }
 
-            if (usernameError && usernameError.code !== 'PGRST116') { // PGRST116 means no rows returned
+            if (usernameError && usernameError.code !== 'PGRST116') { // PGRST116 means no rows returned, which is good
                 console.error("Username Check Error:", usernameError);
                 return res.status(500).json({ error: "Failed to validate username" });
             }
@@ -124,10 +127,13 @@ router.get("/:username", verifyToken, async (req, res) => {
             .single();
 
         if (error || !user) {
-            return res.status(404).json({ error: "User not found" });
+            if (error?.code === 'PGRST116') { // No rows found
+                return res.status(404).json({ error: "User not found" });
+            }
+            return res.status(500).json({ error: "Failed to fetch user" });
         }
 
-        // Get follow counts using the new helper
+        // Get follow counts
         const counts = await getFollowCounts(user.id);
 
         // Get social status for authenticated users
@@ -184,10 +190,13 @@ router.get("/", verifyToken, async (req, res) => {
             .single();
 
         if (error || !user) {
-            return res.status(404).json({ error: "User not found" });
+            if (error?.code === 'PGRST116') { // No rows found
+                return res.status(404).json({ error: "Profile not found" });
+            }
+            return res.status(500).json({ error: "Failed to fetch profile" });
         }
 
-        // Get follow counts using the new helper
+        // Get follow counts
         const counts = await getFollowCounts(userId);
 
         return res.status(200).json({
