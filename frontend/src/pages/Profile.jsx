@@ -29,6 +29,7 @@ import {
   TabList,
   Tab,
   Select,
+  Center,
 } from "@chakra-ui/react";
 import { 
   ChevronDownIcon, 
@@ -46,6 +47,7 @@ import { postService } from "../services/postService";
 import { socialService } from "../services/socialService";
 import AvatarSelector from "../components/AvatarSelector";
 import useAuthState from "../hooks/useAuthState";
+import { useInView } from 'react-intersection-observer';
 
 function Profile() {
   const { username } = useParams();
@@ -71,14 +73,68 @@ function Profile() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [availableCategories, setAvailableCategories] = useState([]);
   const [filteredPosts, setFilteredPosts] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  
+  // Intersection observer for infinite scrolling
+  const { ref, inView } = useInView({
+    threshold: 0,
+  });
 
-  // Redirect to /user/:username if accessed via /profile
-  useEffect(() => {
-    if (!username && user) {
-      navigate(`/user/${user.username}`);
+  // Function to load more posts
+  const loadMorePosts = useCallback(async () => {
+    if (!username || !hasMore || isLoadingPosts) return;
+    
+    try {
+      setIsLoadingPosts(true);
+      const response = await postService.getUserPosts(username, {
+        page,
+        category: selectedCategory !== "all" ? selectedCategory : undefined,
+        type: postType !== "all" ? postType : undefined
+      });
+      
+      if (!response.posts || response.posts.length === 0) {
+        setHasMore(false);
+        if (page === 1) {
+          setPosts([]);
+        }
+      } else {
+        setPosts(prevPosts => [...prevPosts, ...response.posts]);
+        setPage(prevPage => prevPage + 1);
+      }
+      
+      // Set available categories on first load
+      if (page === 1 && response.categories) {
+        setAvailableCategories(response.categories);
+      }
+    } catch (error) {
+      toast({
+        title: "Error loading posts",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setIsLoadingPosts(false);
     }
-  }, [username, user, navigate]);
+  }, [username, page, selectedCategory, postType, hasMore, isLoadingPosts, toast]);
 
+  // Reset posts when filters change
+  useEffect(() => {
+    setPosts([]);
+    setPage(1);
+    setHasMore(true);
+    loadMorePosts(); // Load first page immediately after reset
+  }, [selectedCategory, postType, loadMorePosts]);
+
+  // Load more posts when scrolling to bottom
+  useEffect(() => {
+    if (inView && !isLoadingPosts && hasMore && page > 1) {
+      loadMorePosts();
+    }
+  }, [inView, isLoadingPosts, hasMore, page, loadMorePosts]);
+
+  // Initial profile fetch
   const fetchProfile = useCallback(async () => {
     try {
       if (!username) return;
@@ -113,68 +169,27 @@ function Profile() {
     }
   }, [username, user, navigate, toast]);
 
-  const fetchPosts = useCallback(async () => {
-    try {
-      const response = await postService.getPosts({
-        author: username,
-        status: "published"
-      });
-      setPosts(response.posts || []);
-      
-      // Get unique categories from the fetched posts
-      const uniqueCategories = [...new Set(
-        response.posts
-          .filter(post => post.category)
-          .map(post => post.category)
-      )];
-      setAvailableCategories(uniqueCategories);
-    } catch (error) {
-      toast({
-        title: "Error loading posts",
-        description: error.message,
-        status: "error",
-        duration: 3000,
-      });
-    } finally {
-      setIsLoadingPosts(false);
-    }
-  }, [username, toast]);
-
   useEffect(() => {
     if (username) {
       fetchProfile();
+      // Reset posts when username changes
+      setPosts([]);
+      setPage(1);
+      setHasMore(true);
+      // Initial load will happen through the filter effect
     }
   }, [username, fetchProfile]);
-
-  useEffect(() => {
-    if (username) {
-      fetchPosts();
-    }
-  }, [username, fetchPosts]);
 
   // Effect to filter and sort posts
   useEffect(() => {
     let filtered = [...posts];
-    
-    // Filter by post type
-    if (postType !== "all") {
-      filtered = filtered.filter(post => post.type === postType);
-    }
-    
-    // Filter by category
-    if (selectedCategory !== "all") {
-      filtered = filtered.filter(post => post.category?.id === selectedCategory);
-    }
-    
-    // Sort posts
     filtered.sort((a, b) => {
       const dateA = new Date(a.published_at).getTime();
       const dateB = new Date(b.published_at).getTime();
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
     });
-    
     setFilteredPosts(filtered);
-  }, [posts, postType, selectedCategory, sortOrder]);
+  }, [posts, sortOrder]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -331,7 +346,7 @@ function Profile() {
         duration: 3000,
       });
       // Refetch posts to ensure state is in sync
-      fetchPosts();
+      loadMorePosts();
     } catch (error) {
       toast({
         title: "Error deleting post",
@@ -730,138 +745,149 @@ function Profile() {
               </HStack>
             </Flex>
 
-            {isLoadingPosts ? (
-              <Spinner size="lg" thickness="4px" speed="0.65s" />
-            ) : filteredPosts.length === 0 ? (
+            {filteredPosts.map((post) => (
               <Box
+                key={post.id}
                 p={6}
-                border="2px dashed"
-                borderColor="paper.300"
-                textAlign="center"
+                border="2px solid"
+                borderColor="black"
+                bg="white"
+                transform="rotate(0.5deg)"
+                boxShadow="5px 5px 0 black"
+                _hover={{
+                  transform: "rotate(0.5deg) translate(-3px, -3px)",
+                  boxShadow: "8px 8px 0 black",
+                  cursor: "pointer"
+                }}
+                transition="all 0.2s"
+                onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
               >
+                <Flex justify="space-between" align="start" width="100%">
+                  <VStack align="start" spacing={3} flex="1">
+                    <Heading size="md">{post.title}</Heading>
+                    <HStack wrap="wrap">
+                      <Badge
+                        px={2}
+                        py={1}
+                        bg="paper.100"
+                        color="paper.800"
+                        fontWeight="bold"
+                        textTransform="uppercase"
+                        border="1px solid"
+                        borderColor="paper.300"
+                      >
+                        {post.type}
+                      </Badge>
+                      {post.category && (
+                        <Badge
+                          px={2}
+                          py={1}
+                          bg="green.100"
+                          color="green.800"
+                          fontWeight="bold"
+                          textTransform="uppercase"
+                          border="1px solid"
+                          borderColor="green.300"
+                        >
+                          {post.category.name}
+                        </Badge>
+                      )}
+                      {post.tags && post.tags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          px={2}
+                          py={1}
+                          bg="teal.100"
+                          color="teal.800"
+                          fontWeight="bold"
+                          textTransform="uppercase"
+                          border="1px solid"
+                          borderColor="teal.300"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </HStack>
+                    <Text noOfLines={3} color="paper.600">
+                      {post.body}
+                    </Text>
+                  </VStack>
+                  
+                  {isOwnProfile && (
+                    <Menu isLazy gutter={4}>
+                      <MenuButton
+                        as={IconButton}
+                        icon={<HamburgerIcon />}
+                        variant="ghost"
+                        aria-label="Post options"
+                        onClick={(e) => e.stopPropagation()}
+                        position="relative"
+                        zIndex={2}
+                      />
+                      <Portal>
+                        <MenuList
+                          border="2px solid"
+                          borderColor="black"
+                          borderRadius="0"
+                          boxShadow="4px 4px 0 black"
+                          onClick={(e) => e.stopPropagation()}
+                          bg="white"
+                          zIndex={1400}
+                          position="relative"
+                        >
+                          <MenuItem 
+                            as={Link}
+                            to={`/posts/${post.id}/edit`}
+                            state={{ from: location.pathname }}
+                            icon={<EditIcon />}
+                          >
+                            Edit
+                          </MenuItem>
+                          <MenuItem 
+                            icon={<ViewOffIcon />} 
+                            onClick={() => handleUnpublishPost(post.id)}
+                          >
+                            Move to Drafts
+                          </MenuItem>
+                          <MenuItem 
+                            icon={<DeleteIcon />} 
+                            color="red.500"
+                            onClick={() => handleDeletePost(post.id)}
+                          >
+                            Delete Post
+                          </MenuItem>
+                        </MenuList>
+                      </Portal>
+                    </Menu>
+                  )}
+                </Flex>
+              </Box>
+            ))}
+            
+            {/* Loading indicator */}
+            {isLoadingPosts && page === 1 && (
+              <Center py={4}>
+                <Spinner size="lg" />
+              </Center>
+            )}
+            
+            {/* Loading more indicator */}
+            {isLoadingPosts && page > 1 && (
+              <Center py={4}>
+                <Spinner size="sm" />
+              </Center>
+            )}
+            
+            {/* Intersection observer target */}
+            {hasMore && !isLoadingPosts && <Box ref={ref} h="20px" />}
+            
+            {/* No posts message */}
+            {!isLoadingPosts && filteredPosts.length === 0 && (
+              <Box p={6} border="2px dashed" borderColor="paper.300" textAlign="center">
                 <Text color="paper.400" fontSize="lg">
                   No posts published yet
                 </Text>
               </Box>
-            ) : (
-              filteredPosts.map((post) => (
-                <Box
-                  key={post.id}
-                  p={6}
-                  border="2px solid"
-                  borderColor="black"
-                  bg="white"
-                  transform="rotate(0.5deg)"
-                  boxShadow="5px 5px 0 black"
-                  _hover={{
-                    transform: "rotate(0.5deg) translate(-3px, -3px)",
-                    boxShadow: "8px 8px 0 black",
-                    cursor: "pointer"
-                  }}
-                  transition="all 0.2s"
-                  onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
-                >
-                  <Flex justify="space-between" align="start" width="100%">
-                    <VStack align="start" spacing={3} flex="1">
-                      <Heading size="md">{post.title}</Heading>
-                      <HStack wrap="wrap">
-                        <Badge
-                          px={2}
-                          py={1}
-                          bg="paper.100"
-                          color="paper.800"
-                          fontWeight="bold"
-                          textTransform="uppercase"
-                          border="1px solid"
-                          borderColor="paper.300"
-                        >
-                          {post.type}
-                        </Badge>
-                        {post.category && (
-                          <Badge
-                            px={2}
-                            py={1}
-                            bg="green.100"
-                            color="green.800"
-                            fontWeight="bold"
-                            textTransform="uppercase"
-                            border="1px solid"
-                            borderColor="green.300"
-                          >
-                            {post.category.name}
-                          </Badge>
-                        )}
-                        {post.tags && post.tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            px={2}
-                            py={1}
-                            bg="teal.100"
-                            color="teal.800"
-                            fontWeight="bold"
-                            textTransform="uppercase"
-                            border="1px solid"
-                            borderColor="teal.300"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </HStack>
-                      <Text noOfLines={3} color="paper.600">
-                        {post.body}
-                      </Text>
-                    </VStack>
-                    
-                    {isOwnProfile && (
-                      <Menu isLazy gutter={4}>
-                        <MenuButton
-                          as={IconButton}
-                          icon={<HamburgerIcon />}
-                          variant="ghost"
-                          aria-label="Post options"
-                          onClick={(e) => e.stopPropagation()}
-                          position="relative"
-                          zIndex={2}
-                        />
-                        <Portal>
-                          <MenuList
-                            border="2px solid"
-                            borderColor="black"
-                            borderRadius="0"
-                            boxShadow="4px 4px 0 black"
-                            onClick={(e) => e.stopPropagation()}
-                            bg="white"
-                            zIndex={1400}
-                            position="relative"
-                          >
-                            <MenuItem 
-                              as={Link}
-                              to={`/posts/${post.id}/edit`}
-                              state={{ from: location.pathname }}
-                              icon={<EditIcon />}
-                            >
-                              Edit
-                            </MenuItem>
-                            <MenuItem 
-                              icon={<ViewOffIcon />} 
-                              onClick={() => handleUnpublishPost(post.id)}
-                            >
-                              Move to Drafts
-                            </MenuItem>
-                            <MenuItem 
-                              icon={<DeleteIcon />} 
-                              color="red.500"
-                              onClick={() => handleDeletePost(post.id)}
-                            >
-                              Delete Post
-                            </MenuItem>
-                          </MenuList>
-                        </Portal>
-                      </Menu>
-                    )}
-                  </Flex>
-                </Box>
-              ))
             )}
           </VStack>
         </Box>

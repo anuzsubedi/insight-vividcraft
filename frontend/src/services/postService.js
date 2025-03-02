@@ -54,6 +54,25 @@ export const postService = {
         }
     },
 
+    async getUserPosts(username, filters = {}) {
+        try {
+            const response = await api.get(`/api/posts/user/${username}`, {
+                params: filters,
+                timeout: 30000
+            });
+            return response.data;
+        } catch (error) {
+            console.error('[GET USER POSTS] Error:', error);
+            if (!error.response) {
+                throw new Error('Network error. Please check your connection.');
+            }
+            if (error.response.status === 404) {
+                throw new Error('User not found');
+            }
+            throw new Error(error.response?.data?.error || 'Failed to fetch user posts');
+        }
+    },
+
     async publishPost(postId) {
         try {
             const response = await api.post(ENDPOINTS.POSTS.PUBLISH(postId));

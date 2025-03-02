@@ -601,4 +601,81 @@ router.get("/find", async (req, res) => {
     }
 });
 
+// Get user posts by username with filters
+router.get("/user/:username", async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { category, type = "all", limit = 20, page = 1 } = req.query;
+        const offset = (page - 1) * limit;
+
+        // First get the user ID
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("id")
+            .eq("username", username.toLowerCase())
+            .single();
+
+        if (userError || !user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Build query for posts
+        let query = supabase
+            .from("posts")
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name)
+            `)
+            .eq("author_id", user.id)
+            .eq("status", "published")
+            .range(offset, offset + limit - 1);
+
+        // Apply filters
+        if (category) {
+            query = query.eq("category_id", category);
+        }
+        
+        if (type !== "all") {
+            query = query.eq("type", type);
+        }
+
+        // Order by most recent first
+        query = query.order("published_at", { ascending: false });
+
+        const { data: posts, error } = await query;
+
+        if (error) {
+            throw error;
+        }
+
+        // Get unique categories for this user's posts
+        const { data: userCategories } = await supabase
+            .from("posts")
+            .select(`
+                category:categories!posts_category_id_fkey (id, name)
+            `)
+            .eq("author_id", user.id)
+            .eq("status", "published");
+
+        const uniqueCategories = userCategories
+            ? Array.from(new Set(userCategories
+                .filter(post => post.category)
+                .map(post => post.category)))
+            : [];
+
+        return res.status(200).json({ 
+            posts: posts || [],
+            categories: uniqueCategories
+        });
+
+    } catch (error) {
+        console.error("Get user posts error:", error);
+        return res.status(500).json({
+            error: "Failed to fetch user posts",
+            details: error.message
+        });
+    }
+});
+
 export default router;
