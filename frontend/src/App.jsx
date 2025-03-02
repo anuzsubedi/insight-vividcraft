@@ -115,7 +115,7 @@ function App() {
                 >
                   <MenuItem
                     as={Link}
-                    to="/profile"
+                    to={`/user/${user.username}`}
                     borderRadius="0"
                     _hover={{ bg: "paper.100" }}
                   >

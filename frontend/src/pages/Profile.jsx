@@ -20,26 +20,41 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { EditIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
-import { Link } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { profileService } from "../services/profileService";
 import { postService } from "../services/postService";
 import AvatarSelector from "../components/AvatarSelector";
+import useAuthState from "../hooks/useAuthState";
 
 function Profile() {
+  const { username } = useParams();
+  const { user } = useAuthState();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedBio, setEditedBio] = useState("");
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [posts, setPosts] = useState([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
 
+  // Redirect to /user/:username if accessed via /profile
+  useEffect(() => {
+    if (!username && user) {
+      navigate(`/user/${user.username}`);
+    }
+  }, [username, user, navigate]);
+
   const fetchProfile = useCallback(async () => {
     try {
-      const response = await profileService.getProfile();
+      if (!username) return;
+      
+      const response = await profileService.getProfileByUsername(username);
       setProfile(response.profile);
       setEditedBio(response.profile.bio || "");
+      setIsOwnProfile(user?.username === username);
       setIsLoading(false);
     } catch (error) {
       toast({
@@ -50,12 +65,12 @@ function Profile() {
       });
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [username, user, toast]);
 
   const fetchPosts = useCallback(async () => {
     try {
       const response = await postService.getPosts({
-        author: profile?.username,
+        author: username,
         status: "published",
       });
       setPosts(response.posts || []);
@@ -69,17 +84,19 @@ function Profile() {
     } finally {
       setIsLoadingPosts(false);
     }
-  }, [profile?.username]);
+  }, [username, toast]);
 
   useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+    if (username) {
+      fetchProfile();
+    }
+  }, [username, fetchProfile]);
 
   useEffect(() => {
-    if (profile?.username) {
+    if (username) {
       fetchPosts();
     }
-  }, [profile?.username, fetchPosts]);
+  }, [username, fetchPosts]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -120,7 +137,7 @@ function Profile() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !profile) {
     return (
       <Box minH="100vh" bg="paper.50" py={8}>
         <Container maxW="container.md">
@@ -186,17 +203,19 @@ function Profile() {
                     color="white"
                   />
                 )}
-                <IconButton
-                  icon={<EditIcon />}
-                  size="sm"
-                  position="absolute"
-                  bottom={0}
-                  right={0}
-                  onClick={onOpen}
-                  colorScheme="teal"
-                  borderRadius="full"
-                  aria-label="Change avatar"
-                />
+                {isOwnProfile && (
+                  <IconButton
+                    icon={<EditIcon />}
+                    size="sm"
+                    position="absolute"
+                    bottom={0}
+                    right={0}
+                    onClick={onOpen}
+                    colorScheme="teal"
+                    borderRadius="full"
+                    aria-label="Change avatar"
+                  />
+                )}
               </Box>
               <Heading size="xl">{profile.displayName}</Heading>
               <Text color="paper.400" fontSize="lg">
@@ -229,14 +248,15 @@ function Profile() {
                   >
                     Bio
                   </FormLabel>
-                  {!isEditing ? (
+                  {isOwnProfile && !isEditing && (
                     <IconButton
                       size="sm"
                       icon={<EditIcon />}
                       onClick={() => setIsEditing(true)}
                       variant="ghost"
                     />
-                  ) : (
+                  )}
+                  {isOwnProfile && isEditing && (
                     <HStack>
                       <IconButton
                         size="sm"
@@ -256,7 +276,7 @@ function Profile() {
                     </HStack>
                   )}
                 </HStack>
-                {isEditing ? (
+                {isEditing && isOwnProfile ? (
                   <Textarea
                     value={editedBio}
                     onChange={(e) => setEditedBio(e.target.value)}
