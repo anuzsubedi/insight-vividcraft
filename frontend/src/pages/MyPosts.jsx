@@ -21,9 +21,10 @@ import {
   Tab,
   Spinner,
   Center,
+  Portal,
 } from "@chakra-ui/react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowBackIcon, EditIcon, CheckIcon, DeleteIcon, HamburgerIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, EditIcon, CheckIcon, DeleteIcon, HamburgerIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { postService } from "../services/postService";
 import PropTypes from "prop-types";
 
@@ -114,7 +115,7 @@ function MyPosts() {
 
   const handlePublish = async (postId) => {
     try {
-      await postService.updatePost(postId, { status: "published" });
+      await postService.publishPost(postId); // Use publishPost instead of updatePost
       toast({
         title: "Post published successfully",
         status: "success",
@@ -125,6 +126,25 @@ function MyPosts() {
       toast({
         title: "Error publishing post",
         description: error.response?.data?.error || "Failed to publish post",
+        status: "error",
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleMoveToDrafts = async (postId) => {
+    try {
+      await postService.updatePost(postId, { status: "draft" });
+      toast({
+        title: "Post moved to drafts",
+        status: "success",
+        duration: 3000,
+      });
+      loadPosts();
+    } catch (error) {
+      toast({
+        title: "Error moving post to drafts",
+        description: error.response?.data?.error || "Failed to move post to drafts",
         status: "error",
         duration: 5000,
       });
@@ -213,6 +233,7 @@ function MyPosts() {
                     posts={publishedPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -220,6 +241,7 @@ function MyPosts() {
                     posts={draftPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -227,6 +249,7 @@ function MyPosts() {
                     posts={scheduledPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
               </TabPanels>
@@ -238,7 +261,7 @@ function MyPosts() {
   );
 }
 
-const PostsList = ({ posts, onDelete, onPublish }) => {
+const PostsList = ({ posts, onDelete, onPublish, onMoveToDrafts }) => {
   const location = useLocation();
   
   return (
@@ -258,6 +281,7 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
             cursor: "pointer"
           }}
           transition="all 0.2s"
+          position="relative"
           onClick={() => window.location.href = `/posts/${post.id}`}
         >
           <HStack justify="space-between" align="start">
@@ -311,45 +335,60 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
               </Text>
             </VStack>
             
-            <Menu isLazy>
+            <Menu isLazy gutter={4}>
               <MenuButton
                 as={IconButton}
                 icon={<HamburgerIcon />}
                 variant="ghost"
                 aria-label="Post options"
                 onClick={(e) => e.stopPropagation()}
+                position="relative"
+                zIndex={2}
               />
-              <MenuList
-                border="2px solid"
-                borderColor="black"
-                borderRadius="0"
-                boxShadow="4px 4px 0 black"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <MenuItem 
-                  as={Link}
-                  to={`/posts/${post.id}/edit`}
-                  state={{ from: location.pathname }}
-                  icon={<EditIcon />}
+              <Portal>
+                <MenuList
+                  border="2px solid"
+                  borderColor="black"
+                  borderRadius="0"
+                  boxShadow="4px 4px 0 black"
+                  onClick={(e) => e.stopPropagation()}
+                  bg="white"
+                  zIndex={1400}
+                  position="relative"
                 >
-                  Edit
-                </MenuItem>
-                {post.status !== "published" && (
                   <MenuItem 
-                    onClick={() => onPublish(post.id)}
-                    icon={<CheckIcon />}
+                    as={Link}
+                    to={`/posts/${post.id}/edit`}
+                    state={{ from: location.pathname }}
+                    icon={<EditIcon />}
                   >
-                    Publish Now
+                    Edit
                   </MenuItem>
-                )}
-                <MenuItem 
-                  color="red.500" 
-                  onClick={() => onDelete(post.id)}
-                  icon={<DeleteIcon />}
-                >
-                  Delete
-                </MenuItem>
-              </MenuList>
+                  {(post.status === "scheduled" || post.status === "draft") && (
+                    <MenuItem 
+                      onClick={() => onPublish(post.id)}
+                      icon={<CheckIcon />}
+                    >
+                      Publish Now
+                    </MenuItem>
+                  )}
+                  {post.status === "published" && (
+                    <MenuItem 
+                      onClick={() => onMoveToDrafts(post.id)}
+                      icon={<ViewOffIcon />}
+                    >
+                      Move to Drafts
+                    </MenuItem>
+                  )}
+                  <MenuItem 
+                    color="red.500" 
+                    onClick={() => onDelete(post.id)}
+                    icon={<DeleteIcon />}
+                  >
+                    Delete
+                  </MenuItem>
+                </MenuList>
+              </Portal>
             </Menu>
           </HStack>
         </Box>
@@ -374,6 +413,7 @@ PostsList.propTypes = {
   ).isRequired,
   onDelete: PropTypes.func.isRequired,
   onPublish: PropTypes.func.isRequired,
+  onMoveToDrafts: PropTypes.func.isRequired,
 };
 
 export default MyPosts;

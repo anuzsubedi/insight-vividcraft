@@ -157,6 +157,7 @@ router.put("/:id", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
+        // Start a transaction for the update
         const updates = {
             title: title || existingPost.title,
             body: body || existingPost.body,
@@ -164,15 +165,16 @@ router.put("/:id", verifyToken, async (req, res) => {
             category_id: categoryId || existingPost.category_id,
             status: status || existingPost.status,
             scheduled_for: status === 'scheduled' ? scheduledFor : null,
-            published_at: status === 'published' ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString(),
-            tags: tags || existingPost.tags
+            published_at: status === 'published' ? new Date().toISOString() : existingPost.published_at,
+            updated_at: new Date().toISOString()
         };
 
+        // Update slug if title changed
         if (title && title !== existingPost.title) {
             updates.slug = await generateUniqueSlug(title);
         }
 
+        // Update the post first
         const { data: post, error: updateError } = await supabase
             .from('posts')
             .update(updates)
@@ -185,55 +187,79 @@ router.put("/:id", verifyToken, async (req, res) => {
             .single();
 
         if (updateError) {
+            console.error('Post update error:', updateError);
             return res.status(500).json({ error: "Failed to update post" });
         }
 
-        // Handle tags update
-        if (tags) {
-            await supabase
-                .from('post_tags')
-                .delete()
-                .eq('post_id', existingPost.id);
-
-            if (tags.length > 0) {
-                const tagPromises = tags.map(tag => {
-                    return supabase
-                        .from('tags')
-                        .select('id')
-                        .eq('name', tag.toLowerCase())
-                        .single()
-                        .then(async ({ data: existingTag }) => {
-                            if (!existingTag) {
-                                const { data: newTag } = await supabase
-                                    .from('tags')
-                                    .insert({ name: tag.toLowerCase() })
-                                    .select('id')
-                                    .single();
-                                return newTag.id;
-                            }
-                            return existingTag.id;
-                        });
-                });
-
-                const tagIds = await Promise.all(tagPromises);
-
+        // Only handle tags if they were provided in the request
+        if (tags !== undefined) {
+            try {
+                // Delete existing tags first
                 await supabase
                     .from('post_tags')
-                    .insert(tagIds.map(tagId => ({
-                        post_id: existingPost.id,
-                        tag_id: tagId
-                    })));
+                    .delete()
+                    .eq('post_id', existingPost.id);
+
+                if (tags && tags.length > 0) {
+                    // Process all tags in parallel
+                    const tagPromises = tags.map(async (tag) => {
+                        const { data: existingTag } = await supabase
+                            .from('tags')
+                            .select('id')
+                            .eq('name', tag.toLowerCase())
+                            .single();
+
+                        if (existingTag) {
+                            return existingTag.id;
+                        } else {
+                            const { data: newTag, error: tagError } = await supabase
+                                .from('tags')
+                                .insert({ name: tag.toLowerCase() })
+                                .select('id')
+                                .single();
+
+                            if (tagError) {
+                                console.error('Tag creation error:', tagError);
+                                throw tagError;
+                            }
+                            
+                            return newTag.id;
+                        }
+                    });
+
+                    const tagIds = await Promise.all(tagPromises);
+
+                    // Insert new tag associations
+                    const { error: tagLinkError } = await supabase
+                        .from('post_tags')
+                        .insert(tagIds.map(tagId => ({
+                            post_id: existingPost.id,
+                            tag_id: tagId
+                        })));
+
+                    if (tagLinkError) {
+                        console.error('Tag linking error:', tagLinkError);
+                        throw tagLinkError;
+                    }
+                }
+            } catch (tagError) {
+                console.error('Tag processing error:', tagError);
+                // Don't fail the whole update if tags fail
+                console.warn('Failed to update tags but post was updated successfully');
             }
         }
 
         return res.status(200).json({
             message: "Post updated successfully",
-            post
+            post: {
+                ...post,
+                tags: tags || existingPost.tags
+            }
         });
 
     } catch (error) {
         console.error('Update post error:', error);
-        return res.status(500).json({ error: "Failed to update post" });
+        return res.status(500).json({ error: "Failed to update post", details: error.message });
     }
 });
 
