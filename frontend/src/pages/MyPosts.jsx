@@ -32,6 +32,7 @@ function MyPosts() {
   const [draftPosts, setDraftPosts] = useState([]);
   const [scheduledPosts, setScheduledPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState(0);
   const toast = useToast();
 
   const loadPosts = useCallback(async () => {
@@ -199,7 +200,7 @@ function MyPosts() {
               <Spinner />
             </Center>
           ) : (
-            <Tabs variant="enclosed">
+            <Tabs variant="enclosed" index={currentTab} onChange={setCurrentTab}>
               <TabList>
                 <Tab>Published ({publishedPosts.length})</Tab>
                 <Tab>Drafts ({draftPosts.length})</Tab>
@@ -265,6 +266,11 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
                 {post.category && (
                   <Badge colorScheme="purple">{post.category.name}</Badge>
                 )}
+                {post.tags && post.tags.map((tag) => (
+                  <Badge key={tag} colorScheme="teal">
+                    {tag}
+                  </Badge>
+                ))}
               </HStack>
               {post.status === "scheduled" && (
                 <Text fontSize="sm" color="paper.400">
