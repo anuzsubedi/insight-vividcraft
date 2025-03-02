@@ -56,11 +56,35 @@ export const postService = {
     // User posts operations
     async getUserPosts(username, filters = {}) {
         try {
-            const response = await api.get(`/api/posts/user/${username}`, {
-                params: filters,
+            const {
+                page = 1,
+                limit = 10,
+                category,
+                type,
+                sortBy = "newest"
+            } = filters;
+
+            const response = await api.get(ENDPOINTS.POSTS.GET_USER_POSTS(username), {
+                params: {
+                    page,
+                    limit,
+                    category: category !== "all" ? category : undefined,
+                    type: type !== "all" ? type : undefined,
+                    sortBy
+                },
                 timeout: 30000
             });
-            return response.data;
+
+            return {
+                posts: response.data.posts || [],
+                categories: response.data.categories || [],
+                pagination: response.data.pagination || {
+                    total: 0,
+                    page,
+                    limit,
+                    hasMore: false
+                }
+            };
         } catch (error) {
             console.error('[GET USER POSTS] Error:', error);
             if (!error.response) {

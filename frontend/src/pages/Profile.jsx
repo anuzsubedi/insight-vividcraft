@@ -64,18 +64,20 @@ function Profile() {
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  
+  // Posts state
   const [posts, setPosts] = useState([]);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
-  const [editMode, setEditMode] = useState(null); // null, 'bio', 'name', 'username'
-  const [showEditButtons, setShowEditButtons] = useState(false);
+  const [filteredPosts, setFilteredPosts] = useState([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
   const [postType, setPostType] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [availableCategories, setAvailableCategories] = useState([]);
-  const [filteredPosts, setFilteredPosts] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalPosts, setTotalPosts] = useState(0);
+  const [editMode, setEditMode] = useState(null);
+  const [showEditButtons, setShowEditButtons] = useState(false);
   
   // Intersection observer for infinite scrolling
   const { ref, inView } = useInView({
@@ -90,11 +92,12 @@ function Profile() {
       setIsLoadingPosts(true);
       const response = await postService.getUserPosts(username, {
         page,
-        category: selectedCategory !== "all" ? selectedCategory : undefined,
-        type: postType !== "all" ? postType : undefined
+        limit: 10,
+        category: selectedCategory,
+        type: postType,
+        sortBy: sortOrder
       });
       
-      // Check if we got a valid response with posts array
       if (!response || !response.posts) {
         setHasMore(false);
         if (page === 1) {
@@ -105,17 +108,14 @@ function Profile() {
       }
 
       // Update pagination state
-      if (response.pagination) {
-        setHasMore(response.pagination.hasMore);
-        setTotalPosts(response.pagination.total);
-      }
+      const { pagination } = response;
+      setHasMore(pagination.hasMore);
+      setTotalPosts(pagination.total);
 
       // Update posts list
-      if (page === 1) {
-        setPosts(response.posts);
-      } else {
-        setPosts(prevPosts => [...prevPosts, ...response.posts]);
-      }
+      const newPosts = page === 1 ? response.posts : [...posts, ...response.posts];
+      setPosts(newPosts);
+      setFilteredPosts(newPosts);
       
       // Set available categories on first load
       if (page === 1 && response.categories) {
@@ -123,18 +123,25 @@ function Profile() {
       }
     } catch (error) {
       console.error("Error loading posts:", error);
-      toast({
-        title: "Error loading posts",
-        description: error.message,
-        status: "error",
-        duration: 3000,
-      });
+      // Don't show error toast for network timeouts to avoid spam
+      if (!error.message.includes('timeout')) {
+        toast({
+          title: "Error loading posts",
+          description: error.message,
+          status: "error",
+          duration: 3000,
+        });
+      }
       // Reset hasMore on error to prevent infinite loading attempts
       setHasMore(false);
+      if (page === 1) {
+        setPosts([]);
+        setFilteredPosts([]);
+      }
     } finally {
       setIsLoadingPosts(false);
     }
-  }, [username, page, selectedCategory, postType, hasMore, isLoadingPosts, toast]);
+  }, [username, page, selectedCategory, postType, sortOrder, posts, hasMore, isLoadingPosts, toast]);
 
   // Reset and reload posts when filters change
   useEffect(() => {
@@ -143,18 +150,15 @@ function Profile() {
     setFilteredPosts([]);
     setPage(1);
     setHasMore(true);
-    // Use setTimeout to ensure state updates have propagated
-    setTimeout(() => {
-      loadMorePosts();
-    }, 0);
-  }, [selectedCategory, postType, username, loadMorePosts]);
+    loadMorePosts();
+  }, [selectedCategory, postType, sortOrder, username, loadMorePosts]);
 
   // Load more posts when scrolling to bottom
   useEffect(() => {
-    if (inView && !isLoadingPosts && hasMore) {
+    if (inView && !isLoadingPosts && hasMore && page > 0) {
       setPage(prev => prev + 1);
     }
-  }, [inView, isLoadingPosts, hasMore]);
+  }, [inView, isLoadingPosts, hasMore, page]);
 
   // Effect to load more posts when page changes
   useEffect(() => {
@@ -162,6 +166,18 @@ function Profile() {
       loadMorePosts();
     }
   }, [page, loadMorePosts]);
+
+  // Effect to filter and sort posts
+  useEffect(() => {
+    // Don't filter if we don't have any posts
+    if (!posts.length) {
+      setFilteredPosts([]);
+      return;
+    }
+    
+    // Posts are already sorted from the backend
+    setFilteredPosts(posts);
+  }, [posts]);
 
   // Initial profile fetch
   const fetchProfile = useCallback(async () => {
@@ -209,23 +225,6 @@ function Profile() {
       // Initial load will happen through the filter effect
     }
   }, [username, fetchProfile]);
-
-  // Effect to filter and sort posts
-  useEffect(() => {
-    // Don't filter if we don't have any posts
-    if (!posts.length) {
-      setFilteredPosts([]);
-      return;
-    }
-
-    let filtered = [...posts];
-    filtered.sort((a, b) => {
-      const dateA = new Date(a.published_at).getTime();
-      const dateB = new Date(b.published_at).getTime();
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
-    });
-    setFilteredPosts(filtered);
-  }, [posts, sortOrder]);
 
   const handleUpdateProfile = async () => {
     try {

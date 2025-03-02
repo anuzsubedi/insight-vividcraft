@@ -313,10 +313,16 @@ router.get("/", async (req, res, next) => {
 router.get("/user/:username", async (req, res) => {
     try {
         const { username } = req.params;
-        const { category, type = "all", limit = 10, page = 1 } = req.query;
+        const { 
+            category, 
+            type = "all", 
+            limit = 10, 
+            page = 1,
+            sortBy = "newest"
+        } = req.query;
         const offset = (page - 1) * limit;
 
-        console.log('Getting posts for user:', { username, category, type, limit, page, offset });
+        console.log('Getting posts for user:', { username, category, type, limit, page, offset, sortBy });
 
         // First get the user ID
         const { data: user, error: userError } = await supabase
@@ -337,7 +343,7 @@ router.get("/user/:username", async (req, res) => {
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
                 category:categories!posts_category_id_fkey (id, name)
-            `, { count: 'exact' })  // Add count to get total number of records
+            `, { count: 'exact' })
             .eq("author_id", user.id)
             .eq("status", "published");
 
@@ -350,9 +356,18 @@ router.get("/user/:username", async (req, res) => {
             query = query.eq("type", type);
         }
 
-        // Order by most recent first
-        query = query.order("published_at", { ascending: false })
-            .range(offset, offset + limit - 1);
+        // Apply sorting
+        switch (sortBy) {
+            case "oldest":
+                query = query.order("published_at", { ascending: true });
+                break;
+            case "newest":
+            default:
+                query = query.order("published_at", { ascending: false });
+        }
+
+        // Apply pagination
+        query = query.range(offset, offset + limit - 1);
 
         console.log('Executing query for user posts');
         const { data: posts, error, count } = await query;
@@ -376,6 +391,9 @@ router.get("/user/:username", async (req, res) => {
                 userCategories
                     .filter(post => post.category)
                     .map(post => post.category)
+                    .filter((category, index, self) => 
+                        index === self.findIndex(c => c.id === category.id)
+                    )
             ))
             : [];
 
