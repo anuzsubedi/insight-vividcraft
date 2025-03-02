@@ -43,7 +43,10 @@ function EditPost() {
 
   const handleSubmit = async (postData) => {
     try {
-      await postService.updatePost(id, postData);
+      await postService.updatePost(id, {
+        ...postData,
+        tags: postData.tags || [] // Ensure tags are always sent as an array
+      });
       
       // Navigate first, then show the toast
       const previousPath = location.state?.from || "/my-posts";

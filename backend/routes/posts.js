@@ -51,72 +51,21 @@ router.post("/", verifyToken, async (req, res) => {
                 status,
                 scheduled_for: status === 'scheduled' ? scheduledFor : null,
                 published_at: status === 'published' ? new Date().toISOString() : null,
-                tags: tags || []
+                tags: Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : []
             })
-            .select()
+            .select(`
+                *,
+                author:users(id, username, display_name)
+            `)
             .single();
 
         if (postError || !post) {
             return res.status(500).json({ error: "Failed to create post" });
         }
 
-        if (tags && tags.length > 0 && post.id) {
-            try {
-                const tagIds = [];
-                for (const tag of tags) {
-                    const { data: existingTag } = await supabase
-                        .from('tags')
-                        .select('id')
-                        .eq('name', tag.toLowerCase())
-                        .single();
-
-                    if (existingTag) {
-                        tagIds.push(existingTag.id);
-                    } else {
-                        const { data: newTag } = await supabase
-                            .from('tags')
-                            .insert({ name: tag.toLowerCase() })
-                            .select('id')
-                            .single();
-
-                        if (newTag) {
-                            tagIds.push(newTag.id);
-                        }
-                    }
-                }
-
-                if (tagIds.length > 0) {
-                    await supabase
-                        .from('post_tags')
-                        .insert(tagIds.map(tagId => ({
-                            post_id: post.id,
-                            tag_id: tagId
-                        })));
-                }
-            } catch (tagError) {
-                // Silently handle tag processing errors
-            }
-        }
-
-        const { data: completePost, error: fetchError } = await supabase
-            .from('posts')
-            .select(`
-                *,
-                author:users(id, username, display_name)
-            `)
-            .eq('id', post.id)
-            .single();
-
-        if (fetchError) {
-            return res.status(201).json({
-                message: "Post created successfully",
-                post
-            });
-        }
-
         return res.status(201).json({
             message: "Post created successfully",
-            post: completePost
+            post
         });
 
     } catch (error) {
@@ -166,7 +115,8 @@ router.put("/:id", verifyToken, async (req, res) => {
             status: status || existingPost.status,
             scheduled_for: status === 'scheduled' ? scheduledFor : null,
             published_at: status === 'published' ? new Date().toISOString() : existingPost.published_at,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            tags: Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : existingPost.tags // Handle tags as text array
         };
 
         // Update slug if title changed
@@ -174,7 +124,7 @@ router.put("/:id", verifyToken, async (req, res) => {
             updates.slug = await generateUniqueSlug(title);
         }
 
-        // Update the post first
+        // Update the post
         const { data: post, error: updateError } = await supabase
             .from('posts')
             .update(updates)
@@ -191,70 +141,9 @@ router.put("/:id", verifyToken, async (req, res) => {
             return res.status(500).json({ error: "Failed to update post" });
         }
 
-        // Only handle tags if they were provided in the request
-        if (tags !== undefined) {
-            try {
-                // Delete existing tags first
-                await supabase
-                    .from('post_tags')
-                    .delete()
-                    .eq('post_id', existingPost.id);
-
-                if (tags && tags.length > 0) {
-                    // Process all tags in parallel
-                    const tagPromises = tags.map(async (tag) => {
-                        const { data: existingTag } = await supabase
-                            .from('tags')
-                            .select('id')
-                            .eq('name', tag.toLowerCase())
-                            .single();
-
-                        if (existingTag) {
-                            return existingTag.id;
-                        } else {
-                            const { data: newTag, error: tagError } = await supabase
-                                .from('tags')
-                                .insert({ name: tag.toLowerCase() })
-                                .select('id')
-                                .single();
-
-                            if (tagError) {
-                                console.error('Tag creation error:', tagError);
-                                throw tagError;
-                            }
-                            
-                            return newTag.id;
-                        }
-                    });
-
-                    const tagIds = await Promise.all(tagPromises);
-
-                    // Insert new tag associations
-                    const { error: tagLinkError } = await supabase
-                        .from('post_tags')
-                        .insert(tagIds.map(tagId => ({
-                            post_id: existingPost.id,
-                            tag_id: tagId
-                        })));
-
-                    if (tagLinkError) {
-                        console.error('Tag linking error:', tagLinkError);
-                        throw tagLinkError;
-                    }
-                }
-            } catch (tagError) {
-                console.error('Tag processing error:', tagError);
-                // Don't fail the whole update if tags fail
-                console.warn('Failed to update tags but post was updated successfully');
-            }
-        }
-
         return res.status(200).json({
             message: "Post updated successfully",
-            post: {
-                ...post,
-                tags: tags || existingPost.tags
-            }
+            post
         });
 
     } catch (error) {
@@ -279,6 +168,9 @@ router.get("/:id", async (req, res) => {
         if (error || !post) {
             return res.status(404).json({ error: "Post not found" });
         }
+
+        // Ensure tags is always an array
+        post.tags = post.tags || [];
 
         return res.status(200).json({ post });
     } catch (error) {
@@ -481,12 +373,10 @@ router.get("/feed", async (req, res) => {
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
                 category:categories!posts_category_id_fkey (id, name),
-                tags:post_tags(tag:tags(id, name)),
                 comments:post_comments(count),
                 likes:post_likes(count)
-            `, { count: 'exact' }) // Count comments and likes using exact method
+            `, { count: 'exact' })
             .eq("status", "published")
-            //.order("published_at", { ascending: false }) // Default: Most recent first
             .range(offset, offset + limit - 1);
 
         switch (filter) {
@@ -508,7 +398,8 @@ router.get("/feed", async (req, res) => {
         }
 
         if (tag) {
-            query = query.contains("tags.tag.name", [tag]); // Filter by tags
+            // Update tag filtering to use contains on the text array
+            query = query.contains('tags', [tag.toLowerCase()]);
         }
 
         const { data: posts, error } = await query;
@@ -560,7 +451,8 @@ router.get("/filter", async (req, res) => {
         }
 
         if (tag) {
-            query = query.contains("tags.tag.name", [tag]);
+            // Update tag filtering to use contains on the text array
+            query = query.contains('tags', [tag.toLowerCase()]);
         }
 
         if (author) {
@@ -583,7 +475,7 @@ router.get("/filter", async (req, res) => {
                 query = query.order("comments.count", { ascending: false });
                 break;
             default:
-                break;
+                query = query.order("published_at", { ascending: false });
         }
 
         const { data: posts, error } = await query;
