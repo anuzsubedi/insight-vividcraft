@@ -23,7 +23,7 @@ import {
   Center,
 } from "@chakra-ui/react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowBackIcon, EditIcon } from "@chakra-ui/icons";
+import { ArrowBackIcon, EditIcon, CheckIcon, DeleteIcon, HamburgerIcon } from "@chakra-ui/icons";
 import { postService } from "../services/postService";
 import PropTypes from "prop-types";
 
@@ -255,8 +255,10 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
           _hover={{
             transform: "rotate(0.5deg) translate(-3px, -3px)",
             boxShadow: "8px 8px 0 black",
+            cursor: "pointer"
           }}
           transition="all 0.2s"
+          onClick={() => window.location.href = `/posts/${post.id}`}
         >
           <HStack justify="space-between" align="start">
             <VStack align="start" spacing={3} flex="1">
@@ -307,58 +309,44 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
               <Text noOfLines={3} color="paper.600">
                 {post.body}
               </Text>
-              <HStack>
-                <Button
-                  as={Link}
-                  to={`/posts/${post.id}`}
-                  state={{ from: location.pathname }}
-                  size="sm"
-                  variant="outline"
-                  borderWidth="2px"
-                  borderColor="black"
-                  boxShadow="2px 2px 0 black"
-                  _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
-                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
-                >
-                  View Post
-                </Button>
-                <Button
-                  as={Link}
-                  to={`/posts/${post.id}/edit`}
-                  state={{ from: location.pathname }}
-                  size="sm"
-                  variant="outline"
-                  leftIcon={<EditIcon />}
-                  borderWidth="2px"
-                  borderColor="black"
-                  boxShadow="2px 2px 0 black"
-                  _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
-                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
-                >
-                  Edit
-                </Button>
-              </HStack>
             </VStack>
             
-            <Menu>
+            <Menu isLazy>
               <MenuButton
                 as={IconButton}
-                icon={<EditIcon />}
+                icon={<HamburgerIcon />}
                 variant="ghost"
                 aria-label="Post options"
+                onClick={(e) => e.stopPropagation()}
               />
               <MenuList
                 border="2px solid"
                 borderColor="black"
                 borderRadius="0"
                 boxShadow="4px 4px 0 black"
+                onClick={(e) => e.stopPropagation()}
               >
+                <MenuItem 
+                  as={Link}
+                  to={`/posts/${post.id}/edit`}
+                  state={{ from: location.pathname }}
+                  icon={<EditIcon />}
+                >
+                  Edit
+                </MenuItem>
                 {post.status !== "published" && (
-                  <MenuItem onClick={() => onPublish(post.id)}>
+                  <MenuItem 
+                    onClick={() => onPublish(post.id)}
+                    icon={<CheckIcon />}
+                  >
                     Publish Now
                   </MenuItem>
                 )}
-                <MenuItem color="red.500" onClick={() => onDelete(post.id)}>
+                <MenuItem 
+                  color="red.500" 
+                  onClick={() => onDelete(post.id)}
+                  icon={<DeleteIcon />}
+                >
                   Delete
                 </MenuItem>
               </MenuList>

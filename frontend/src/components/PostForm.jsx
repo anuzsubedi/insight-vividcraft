@@ -59,7 +59,7 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
     };
 
     fetchCategories();
-  }, []);
+  }, [toast]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -108,6 +108,8 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
       }
 
       await onSubmit(submitData);
+      // Clear any existing errors after successful submission
+      setErrors({});
       toast({
         title: `Post ${isEditing ? "updated" : "created"} successfully!`,
         status: "success",

@@ -44,14 +44,15 @@ function EditPost() {
   const handleSubmit = async (postData) => {
     try {
       await postService.updatePost(id, postData);
+      // Immediately navigate after successful update
+      const previousPath = location.state?.from || "/my-posts";
+      navigate(previousPath);
+      // Show success toast after navigation
       toast({
         title: "Post updated successfully",
         status: "success",
         duration: 3000,
       });
-      // Navigate back to the previous page or default to my-posts
-      const previousPath = location.state?.from || "/my-posts";
-      navigate(previousPath);
     } catch (error) {
       toast({
         title: "Error updating post",

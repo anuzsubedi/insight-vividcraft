@@ -31,8 +31,8 @@ import {
   BellIcon, 
   NotAllowedIcon, 
   DeleteIcon, 
-  ViewOffIcon, 
-  SettingsIcon 
+  ViewOffIcon,
+  HamburgerIcon 
 } from "@chakra-ui/icons";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { profileService } from "../services/profileService";
@@ -257,17 +257,21 @@ function Profile() {
 
   const handleDeletePost = async (postId) => {
     try {
+      // Wait for deletion to complete
       await postService.deletePost(postId);
-      setPosts(posts.filter(post => post.id !== postId));
+      // Only remove from state if deletion was successful
+      setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
       toast({
-        title: "Post deleted",
+        title: "Post deleted successfully",
         status: "success",
         duration: 3000,
       });
+      // Refetch posts to ensure state is in sync
+      fetchPosts();
     } catch (error) {
       toast({
         title: "Error deleting post",
-        description: error.message,
+        description: error.response?.data?.error || "Failed to delete post",
         status: "error",
         duration: 3000,
       });
@@ -631,8 +635,10 @@ function Profile() {
                   _hover={{
                     transform: "rotate(0.5deg) translate(-3px, -3px)",
                     boxShadow: "8px 8px 0 black",
+                    cursor: "pointer"
                   }}
                   transition="all 0.2s"
+                  onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
                 >
                   <Flex justify="space-between" align="start" width="100%">
                     <VStack align="start" spacing={3} flex="1">
@@ -683,55 +689,32 @@ function Profile() {
                       <Text noOfLines={3} color="paper.600">
                         {post.body}
                       </Text>
-                      <HStack>
-                        <Button
-                          as={Link}
-                          to={`/posts/${post.id}`}
-                          state={{ from: location.pathname }}
-                          size="sm"
-                          variant="outline"
-                          borderWidth="2px"
-                          borderColor="black"
-                          boxShadow="2px 2px 0 black"
-                          _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
-                          _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
-                        >
-                          Read More
-                        </Button>
-                        {isOwnProfile && (
-                          <Button
-                            as={Link}
-                            to={`/posts/${post.id}/edit`}
-                            state={{ from: location.pathname }}
-                            size="sm"
-                            variant="outline"
-                            leftIcon={<EditIcon />}
-                            borderWidth="2px"
-                            borderColor="black"
-                            boxShadow="2px 2px 0 black"
-                            _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
-                            _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                      </HStack>
                     </VStack>
                     
                     {isOwnProfile && (
-                      <Menu>
+                      <Menu isLazy>
                         <MenuButton
                           as={IconButton}
-                          icon={<EditIcon />}
+                          icon={<HamburgerIcon />}
                           variant="ghost"
                           aria-label="Post options"
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <MenuList
                           border="2px solid"
                           borderColor="black"
                           borderRadius="0"
                           boxShadow="4px 4px 0 black"
+                          onClick={(e) => e.stopPropagation()}
                         >
+                          <MenuItem 
+                            as={Link}
+                            to={`/posts/${post.id}/edit`}
+                            state={{ from: location.pathname }}
+                            icon={<EditIcon />}
+                          >
+                            Edit
+                          </MenuItem>
                           <MenuItem 
                             icon={<ViewOffIcon />} 
                             onClick={() => handleUnpublishPost(post.id)}
