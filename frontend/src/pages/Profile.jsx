@@ -75,33 +75,34 @@ function Profile() {
       if (!username) return;
       
       const response = await profileService.getProfileByUsername(username);
-      if (!response.profile) {
-        navigate('/user-not-found', { replace: true });
-        return;
-      }
-      
       setProfile(response.profile);
       setEditedBio(response.profile.bio || "");
       setEditedDisplayName(response.profile.displayName || "");
       setEditedUsername(response.profile.username || "");
       setIsOwnProfile(user?.username === username);
       
-      // Set follow and mute status if available in the response
       if (response.profile.isFollowing !== undefined) {
         setIsFollowing(response.profile.isFollowing);
       }
       if (response.profile.isMuted !== undefined) {
         setIsMuted(response.profile.isMuted);
       }
-      
-      setIsLoading(false);
     } catch (error) {
-      if (error.response?.status === 404) {
+      if (error.message === "User not found" || error.response?.status === 404) {
         navigate('/user-not-found', { replace: true });
+        return;
       }
+      // Only show toast for non-404 errors
+      toast({
+        title: "Error loading profile",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
       setIsLoading(false);
     }
-  }, [username, user, navigate]);
+  }, [username, user, navigate, toast]);
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -136,6 +137,7 @@ function Profile() {
 
   const handleUpdateProfile = async () => {
     try {
+      setIsLoading(true);
       const updateData = {};
       
       if (editMode === 'bio') {
@@ -158,15 +160,24 @@ function Profile() {
       
       // Only navigate if the update was successful and username was changed
       if (editMode === 'username' && response.profile.username !== username) {
+        toast({
+          title: "Username Updated!",
+          description: "Redirecting to new profile...",
+          status: "success",
+          duration: 3000,
+        });
+        // Add a small delay before navigation to allow backend changes to propagate
+        await new Promise(resolve => setTimeout(resolve, 1500));
         navigate(`/user/${response.profile.username}`, { replace: true });
+      } else {
+        toast({
+          title: "Profile Updated!",
+          status: "success",
+          duration: 3000,
+        });
       }
       
       setEditMode(null);
-      toast({
-        title: "Profile Updated!",
-        status: "success",
-        duration: 3000,
-      });
     } catch (error) {
       toast({
         title: "Error updating profile",
@@ -174,6 +185,8 @@ function Profile() {
         status: "error",
         duration: 3000,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 

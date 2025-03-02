@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Box,
@@ -26,16 +26,17 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
-  useEffect(() => {
-    loadProfile();
-  }, [username]);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
       const data = await profileService.getProfileByUsername(username);
       setProfile(data.profile);
     } catch (err) {
+      if (err.message === "User not found" || err.response?.status === 404) {
+        navigate('/user-not-found', { replace: true });
+        return;
+      }
+      // Only show toast for non-404 errors
       toast({
         title: "Error",
         description: err.response?.data?.error || "Failed to load profile",
@@ -46,7 +47,11 @@ export default function UserProfile() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [username, navigate, toast]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [username, loadProfile]);
 
   const handleFollow = async () => {
     if (!user) {
