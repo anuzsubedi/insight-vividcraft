@@ -32,7 +32,8 @@ import {
   NotAllowedIcon, 
   DeleteIcon, 
   ViewOffIcon,
-  HamburgerIcon 
+  HamburgerIcon,
+  CheckIcon 
 } from "@chakra-ui/icons";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { profileService } from "../services/profileService";
@@ -344,7 +345,7 @@ function Profile() {
         >
           {isOwnProfile && (
             <IconButton
-              icon={<EditIcon />}
+              icon={showEditButtons ? <CheckIcon /> : <EditIcon />} // Change icon based on showEditButtons state
               position="absolute"
               top={4}
               right={4}
