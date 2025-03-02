@@ -461,10 +461,10 @@ router.get("/feed", async (req, res) => {
             .range(offset, offset + limit - 1);
 
         switch (filter) {
-            case "most-liked":
+            case "most_liked":
                 query = query.order("likes", { ascending: false });
                 break;
-            case "most-commented":
+            case "most_commented":
                 query = query.order("comments", { ascending: false });
                 break;
             case "chronological":
@@ -498,5 +498,82 @@ router.get("/feed", async (req, res) => {
         });
     }
 });
+
+router.get("/filter", async (req, res) => {
+    try {
+        const {
+            category,
+            tag,
+            author,
+            startDate,
+            endDate,
+            popularity = "none",
+            limit = 10,
+            page = 1
+        } = req.query;
+
+        const offset = (page - 1) * limit;
+
+        let query = supabase
+            .from("posts")
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name),
+                tags:post_tags(tag:tags(id, name)),
+                comments:post_comments(count),
+                likes:post_likes(count)
+            `, { count: "exact" })
+            .eq("status", "published")
+            .range(offset, offset + limit - 1);
+
+        if (category) {
+            query = query.eq("category_id", category);
+        }
+
+        if (tag) {
+            query = query.contains("tags.tag.name", [tag]);
+        }
+
+        if (author) {
+            query = query.eq("author_id", author);
+        }
+
+        if (startDate && endDate) {
+            query = query.gte("published_at", startDate).lte("published_at", endDate);
+        } else if (startDate) {
+            query = query.gte("published_at", startDate);
+        } else if (endDate) {
+            query = query.lte("published_at", endDate);
+        }
+
+        switch (popularity) {
+            case "most_liked":
+                query = query.order("likes.count", { ascending: false });
+                break;
+            case "most_commented":
+                query = query.order("comments.count", { ascending: false });
+                break;
+            default:
+                break;
+        }
+
+        const { data: posts, error } = await query;
+
+        if (error) {
+            throw error;
+        }
+
+        return res.status(200).json({ posts: posts || [] });
+
+    } catch (error) {
+        console.error("Filter endpoint error:", error);
+        return res.status(500).json({
+            error: "Failed to filter posts",
+            details: error.message
+        });
+    }
+});
+
 
 export default router;
