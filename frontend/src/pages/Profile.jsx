@@ -25,6 +25,10 @@ import {
   MenuList,
   MenuItem,
   Portal,
+  Tabs,
+  TabList,
+  Tab,
+  Select,
 } from "@chakra-ui/react";
 import { 
   ChevronDownIcon, 
@@ -62,6 +66,11 @@ function Profile() {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [editMode, setEditMode] = useState(null); // null, 'bio', 'name', 'username'
   const [showEditButtons, setShowEditButtons] = useState(false);
+  const [postType, setPostType] = useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [availableCategories, setAvailableCategories] = useState([]);
+  const [filteredPosts, setFilteredPosts] = useState([]);
 
   // Redirect to /user/:username if accessed via /profile
   useEffect(() => {
@@ -108,9 +117,17 @@ function Profile() {
     try {
       const response = await postService.getPosts({
         author: username,
-        status: "published",
+        status: "published"
       });
       setPosts(response.posts || []);
+      
+      // Get unique categories from the fetched posts
+      const uniqueCategories = [...new Set(
+        response.posts
+          .filter(post => post.category)
+          .map(post => post.category)
+      )];
+      setAvailableCategories(uniqueCategories);
     } catch (error) {
       toast({
         title: "Error loading posts",
@@ -134,6 +151,30 @@ function Profile() {
       fetchPosts();
     }
   }, [username, fetchPosts]);
+
+  // Effect to filter and sort posts
+  useEffect(() => {
+    let filtered = [...posts];
+    
+    // Filter by post type
+    if (postType !== "all") {
+      filtered = filtered.filter(post => post.type === postType);
+    }
+    
+    // Filter by category
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(post => post.category?.id === selectedCategory);
+    }
+    
+    // Sort posts
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.published_at).getTime();
+      const dateB = new Date(b.published_at).getTime();
+      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
+    });
+    
+    setFilteredPosts(filtered);
+  }, [posts, postType, selectedCategory, sortOrder]);
 
   const handleUpdateProfile = async () => {
     try {
@@ -650,9 +691,48 @@ function Profile() {
           mt={8}
         >
           <VStack spacing={6} w="100%" align="stretch">
+            {/* Filters and Tabs */}
+            <Flex direction={{ base: "column", md: "row" }} gap={4} mb={4}>
+              <Tabs flex={1} variant="enclosed">
+                <TabList>
+                  <Tab onClick={() => setPostType("all")}>All</Tab>
+                  <Tab onClick={() => setPostType("post")}>Posts</Tab>
+                  <Tab onClick={() => setPostType("article")}>Articles</Tab>
+                </TabList>
+              </Tabs>
+              
+              <HStack spacing={4}>
+                <Select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  borderWidth="2px"
+                  borderColor="black"
+                  _focus={{ borderColor: "accent.100", boxShadow: "none" }}
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </Select>
+                
+                <Select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  borderWidth="2px"
+                  borderColor="black"
+                  _focus={{ borderColor: "accent.100", boxShadow: "none" }}
+                >
+                  <option value="all">All Categories</option>
+                  {availableCategories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+              </HStack>
+            </Flex>
+
             {isLoadingPosts ? (
               <Spinner size="lg" thickness="4px" speed="0.65s" />
-            ) : posts.length === 0 ? (
+            ) : filteredPosts.length === 0 ? (
               <Box
                 p={6}
                 border="2px dashed"
@@ -664,7 +744,7 @@ function Profile() {
                 </Text>
               </Box>
             ) : (
-              posts.map((post) => (
+              filteredPosts.map((post) => (
                 <Box
                   key={post.id}
                   p={6}
