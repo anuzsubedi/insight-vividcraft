@@ -49,7 +49,8 @@ router.post("/", verifyToken, async (req, res) => {
                 author_id: authorId,
                 status,
                 scheduled_for: status === 'scheduled' ? scheduledFor : null,
-                published_at: status === 'published' ? new Date().toISOString() : null
+                published_at: status === 'published' ? new Date().toISOString() : null,
+                tags: tags || []
             })
             .select()
             .single();
@@ -100,8 +101,7 @@ router.post("/", verifyToken, async (req, res) => {
             .from('posts')
             .select(`
                 *,
-                author:users(id, username, display_name),
-                tags:post_tags(tag:tags(id, name))
+                author:users(id, username, display_name)
             `)
             .eq('id', post.id)
             .single();
@@ -163,7 +163,8 @@ router.put("/:slug", verifyToken, async (req, res) => {
             status: status || existingPost.status,
             scheduled_for: status === 'scheduled' ? scheduledFor : null,
             published_at: status === 'published' ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            tags: tags || existingPost.tags
         };
 
         if (title && title !== existingPost.title) {
@@ -177,8 +178,7 @@ router.put("/:slug", verifyToken, async (req, res) => {
             .select(`
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
-                category:categories!posts_category_id_fkey (id, name),
-                tags:post_tags (tag:tags (id, name))
+                category:categories!posts_category_id_fkey (id, name)
             `)
             .single();
 
@@ -242,8 +242,7 @@ router.get("/:slug", async (req, res) => {
             .select(`
                 *,
                 author:users(id, username, display_name),
-                category:categories(id, name),
-                tags:post_tags(tag:tags(id, name))
+                category:categories(id, name)
             `)
             .eq('slug', req.params.slug)
             .single();
@@ -296,8 +295,7 @@ router.get("/", async (req, res, next) => {
             .select(`
                 *,
                 users!posts_author_id_fkey (id, username, display_name),
-                categories!posts_category_id_fkey (id, name),
-                post_tags (tags (id, name))
+                categories!posts_category_id_fkey (id, name)
             `);
 
         // Add filters
@@ -520,7 +518,6 @@ router.get("/filter", async (req, res) => {
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
                 category:categories!posts_category_id_fkey (id, name),
-                tags:post_tags(tag:tags(id, name)),
                 comments:post_comments(count),
                 likes:post_likes(count)
             `, { count: "exact" })
@@ -634,8 +631,7 @@ router.get("/find", async (req, res) => {
             .select(`
                 id, title, body, published_at, 
                 author:users!posts_author_id_fkey (id, username, display_name),
-                category:categories!posts_category_id_fkey (id, name),
-                tags:post_tags(tag:tags(id, name))
+                category:categories!posts_category_id_fkey (id, name)
             `)
             .eq("status", "published") // Ensure only published posts are shown
             .order("published_at", { ascending: false }) // Default sorting by date

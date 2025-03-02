@@ -304,6 +304,11 @@ function Profile() {
                             {post.category.name}
                           </Badge>
                         )}
+                        {post.tags && post.tags.map((tag) => (
+                          <Badge key={tag} colorScheme="teal">
+                            {tag}
+                          </Badge>
+                        ))}
                       </HStack>
                       <Text noOfLines={2} color="paper.400">
                         {post.body}

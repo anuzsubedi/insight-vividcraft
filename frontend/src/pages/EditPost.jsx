@@ -75,7 +75,7 @@ function EditPost() {
             body: post.body,
             type: post.type,
             categoryId: post.category?.id,
-            tags: post.tags?.map((t) => t.tag.name) || [],
+            tags: post.tags || [],
             status: post.status,
             scheduledFor: post.scheduled_for,
           }}

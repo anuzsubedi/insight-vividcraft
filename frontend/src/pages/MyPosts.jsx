@@ -265,6 +265,11 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
                 {post.category && (
                   <Badge colorScheme="purple">{post.category.name}</Badge>
                 )}
+                {post.tags && post.tags.map((tag) => (
+                  <Badge key={tag} colorScheme="teal">
+                    {tag}
+                  </Badge>
+                ))}
               </HStack>
               {post.status === "scheduled" && (
                 <Text fontSize="sm" color="paper.400">
