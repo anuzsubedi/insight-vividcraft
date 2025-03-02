@@ -59,6 +59,7 @@ function Profile() {
   const [posts, setPosts] = useState([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [editMode, setEditMode] = useState(null); // null, 'bio', 'name', 'username'
+  const [showEditButtons, setShowEditButtons] = useState(false);
 
   // Redirect to /user/:username if accessed via /profile
   useEffect(() => {
@@ -339,7 +340,25 @@ function Profile() {
           border="2px solid"
           borderColor="black"
           boxShadow="6px 6px 0 black"
+          position="relative"
         >
+          {isOwnProfile && (
+            <IconButton
+              icon={<EditIcon />}
+              position="absolute"
+              top={4}
+              right={4}
+              onClick={() => setShowEditButtons(!showEditButtons)}
+              aria-label="Toggle edit mode"
+              variant="solid"
+              borderWidth="2px"
+              borderColor="black"
+              boxShadow="3px 3px 0 black"
+              _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
+              _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
+            />
+          )}
+
           {/* Left Side - Avatar */}
           <Box position="relative" minW={{ base: "150px", md: "200px" }}>
             {profile.avatarName ? (
@@ -367,7 +386,7 @@ function Profile() {
                 boxShadow="5px 5px 0 black"
               />
             )}
-            {isOwnProfile && (
+            {isOwnProfile && showEditButtons && (
               <IconButton
                 icon={<EditIcon />}
                 position="absolute"
@@ -424,7 +443,7 @@ function Profile() {
             ) : (
               <Flex width="100%" align="center">
                 <Heading size="2xl" mb={1}>{profile.displayName}</Heading>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
@@ -477,7 +496,7 @@ function Profile() {
                 <Text color="paper.400" fontSize="xl" fontWeight="bold">
                   @{profile.username}
                 </Text>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
@@ -533,7 +552,7 @@ function Profile() {
                 <Text color="paper.600" fontSize="lg" maxW="600px">
                   {profile.bio || "No bio yet..."}
                 </Text>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
