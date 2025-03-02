@@ -67,10 +67,35 @@ router.post("/", verifyToken, async (req, res) => {
             message: "Post created successfully",
             post
         });
-
     } catch (error) {
         console.error('Create post error:', error);
         return res.status(500).json({ error: "Failed to create post" });
+    }
+});
+
+// Get post by ID
+router.get("/:id", async (req, res) => {
+    try {
+        const { data: post, error } = await supabase
+            .from('posts')
+            .select(`
+                *,
+                author:users(id, username, display_name),
+                category:categories(id, name)
+            `)
+            .eq('id', req.params.id)
+            .single();
+
+        if (error || !post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        // Ensure tags is always an array
+        post.tags = post.tags || [];
+
+        return res.status(200).json({ post });
+    } catch (error) {
+        return res.status(500).json({ error: "Failed to fetch post" });
     }
 });
 
@@ -116,7 +141,7 @@ router.put("/:id", verifyToken, async (req, res) => {
             scheduled_for: status === 'scheduled' ? scheduledFor : null,
             published_at: status === 'published' ? new Date().toISOString() : existingPost.published_at,
             updated_at: new Date().toISOString(),
-            tags: Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : existingPost.tags // Handle tags as text array
+            tags: Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : existingPost.tags
         };
 
         // Update slug if title changed
@@ -149,32 +174,6 @@ router.put("/:id", verifyToken, async (req, res) => {
     } catch (error) {
         console.error('Update post error:', error);
         return res.status(500).json({ error: "Failed to update post", details: error.message });
-    }
-});
-
-// Get post by ID
-router.get("/:id", async (req, res) => {
-    try {
-        const { data: post, error } = await supabase
-            .from('posts')
-            .select(`
-                *,
-                author:users(id, username, display_name),
-                category:categories(id, name)
-            `)
-            .eq('id', req.params.id)
-            .single();
-
-        if (error || !post) {
-            return res.status(404).json({ error: "Post not found" });
-        }
-
-        // Ensure tags is always an array
-        post.tags = post.tags || [];
-
-        return res.status(200).json({ post });
-    } catch (error) {
-        return res.status(500).json({ error: "Failed to fetch post" });
     }
 });
 
@@ -240,7 +239,7 @@ router.post("/:id/publish", verifyToken, async (req, res) => {
     }
 });
 
-// Get posts with filters
+// Get posts with filters (for my posts)
 router.get("/", async (req, res, next) => {
     try {
         // If requesting "my posts", require authentication
@@ -266,7 +265,6 @@ router.get("/", async (req, res, next) => {
         const {
             author,
             category,
-            tag,
             status = 'published',
             page = 1,
             limit = 10
@@ -311,7 +309,121 @@ router.get("/", async (req, res, next) => {
     }
 });
 
-// Get posts scheduled for publication
+// Get user posts by username
+router.get("/user/:username", async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { 
+            category, 
+            type = "all", 
+            limit = 10, 
+            page = 1,
+            sortBy = "newest"
+        } = req.query;
+        const offset = (page - 1) * limit;
+
+        console.log('Getting posts for user:', { username, category, type, limit, page, offset, sortBy });
+
+        // First get the user ID
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("id")
+            .eq("username", username.toLowerCase())
+            .single();
+
+        if (userError || !user) {
+            console.error('User not found:', userError);
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Build query for posts
+        let query = supabase
+            .from("posts")
+            .select(`
+                *,
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name)
+            `, { count: 'exact' })
+            .eq("author_id", user.id)
+            .eq("status", "published");
+
+        // Apply filters
+        if (category && category !== "all") {
+            query = query.eq("category_id", category);
+        }
+        
+        if (type && type !== "all") {
+            query = query.eq("type", type);
+        }
+
+        // Apply sorting
+        switch (sortBy) {
+            case "oldest":
+                query = query.order("published_at", { ascending: true });
+                break;
+            case "newest":
+            default:
+                query = query.order("published_at", { ascending: false });
+        }
+
+        // Apply pagination
+        query = query.range(offset, offset + limit - 1);
+
+        console.log('Executing query for user posts');
+        const { data: posts, error, count } = await query;
+
+        if (error) {
+            console.error('Error fetching posts:', error);
+            throw error;
+        }
+
+        // Get unique categories for this user's posts (for filters)
+        const { data: userCategories } = await supabase
+            .from("posts")
+            .select(`
+                category:categories!posts_category_id_fkey (id, name)
+            `)
+            .eq("author_id", user.id)
+            .eq("status", "published");
+
+        const uniqueCategories = userCategories
+            ? Array.from(new Set(
+                userCategories
+                    .filter(post => post.category)
+                    .map(post => post.category)
+                    .filter((category, index, self) => 
+                        index === self.findIndex(c => c.id === category.id)
+                    )
+            ))
+            : [];
+
+        console.log('Returning posts:', { 
+            count, 
+            postsLength: posts?.length, 
+            categoriesLength: uniqueCategories?.length 
+        });
+
+        return res.status(200).json({ 
+            posts: posts || [],
+            categories: uniqueCategories,
+            pagination: {
+                total: count || 0,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                hasMore: count > offset + posts.length
+            }
+        });
+
+    } catch (error) {
+        console.error("Get user posts error:", error);
+        return res.status(500).json({
+            error: "Failed to fetch user posts",
+            details: error.message
+        });
+    }
+});
+
+// Get scheduled posts for publication
 router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
     try {
         const now = new Date().toISOString();
@@ -356,246 +468,6 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
         console.error('Publish scheduled posts error:', error);
         return res.status(500).json({
             error: "Failed to publish scheduled posts",
-            details: error.message
-        });
-    }
-});
-
-// GET Feed - Retrieve blog posts with filtering options
-router.get("/feed", async (req, res) => {
-    try {
-        const { filter = "recent", limit = 10, page = 1, category, tag } = req.query;
-        const offset = (page - 1) * limit;
-
-        let query = supabase
-            .from("posts")
-            .select(`
-                *,
-                author:users!posts_author_id_fkey (id, username, display_name),
-                category:categories!posts_category_id_fkey (id, name),
-                comments:post_comments(count),
-                likes:post_likes(count)
-            `, { count: 'exact' })
-            .eq("status", "published")
-            .range(offset, offset + limit - 1);
-
-        switch (filter) {
-            case "most_liked":
-                query = query.order("likes", { ascending: false });
-                break;
-            case "most_commented":
-                query = query.order("comments", { ascending: false });
-                break;
-            case "chronological":
-                query = query.order("published_at", { ascending: true });
-                break;
-            default:
-                query = query.order("published_at", { ascending: false });
-        }
-
-        if (category) {
-            query = query.eq("category_id", category);
-        }
-
-        if (tag) {
-            // Update tag filtering to use contains on the text array
-            query = query.contains('tags', [tag.toLowerCase()]);
-        }
-
-        const { data: posts, error } = await query;
-
-        if (error) {
-            throw error;
-        }
-
-        return res.status(200).json({ posts: posts || [] });
-
-    } catch (error) {
-        console.error("Feed endpoint error:", error);
-        return res.status(500).json({
-            error: "Failed to fetch feed",
-            details: error.message
-        });
-    }
-});
-
-router.get("/filter", async (req, res) => {
-    try {
-        const {
-            category,
-            tag,
-            author,
-            startDate,
-            endDate,
-            popularity = "none",
-            limit = 10,
-            page = 1
-        } = req.query;
-
-        const offset = (page - 1) * limit;
-
-        let query = supabase
-            .from("posts")
-            .select(`
-                *,
-                author:users!posts_author_id_fkey (id, username, display_name),
-                category:categories!posts_category_id_fkey (id, name),
-                comments:post_comments(count),
-                likes:post_likes(count)
-            `, { count: "exact" })
-            .eq("status", "published")
-            .range(offset, offset + limit - 1);
-
-        if (category) {
-            query = query.eq("category_id", category);
-        }
-
-        if (tag) {
-            // Update tag filtering to use contains on the text array
-            query = query.contains('tags', [tag.toLowerCase()]);
-        }
-
-        if (author) {
-            query = query.eq("author_id", author);
-        }
-
-        if (startDate && endDate) {
-            query = query.gte("published_at", startDate).lte("published_at", endDate);
-        } else if (startDate) {
-            query = query.gte("published_at", startDate);
-        } else if (endDate) {
-            query = query.lte("published_at", endDate);
-        }
-
-        switch (popularity) {
-            case "most_liked":
-                query = query.order("likes.count", { ascending: false });
-                break;
-            case "most_commented":
-                query = query.order("comments.count", { ascending: false });
-                break;
-            default:
-                query = query.order("published_at", { ascending: false });
-        }
-
-        const { data: posts, error } = await query;
-
-        if (error) {
-            throw error;
-        }
-
-        return res.status(200).json({ posts: posts || [] });
-
-    } catch (error) {
-        console.error("Filter endpoint error:", error);
-        return res.status(500).json({
-            error: "Failed to filter posts",
-            details: error.message
-        });
-    }
-});
-
-// GET Search - Search users based on username, display_name, or email.
-router.get("/search", async (req, res) => {
-    try {
-        const { query, page = 1, limit = 10 } = req.query;
-        
-        // Validate that a search query is provided
-        if (!query || query.trim() === "") {
-            return res.status(400).json({ error: "Search query is required" });
-        }
-
-        const offset = (page - 1) * limit;
-
-        // Build the search query using ILIKE for case-insensitive matching
-        let supabaseQuery = supabase
-            .from("users")
-            .select("id, username, display_name, avatar_name, bio")
-            .or(
-                `username.ilike.%${query}%, display_name.ilike.%${query}%, email.ilike.%${query}%`
-            )
-            .range(offset, offset + limit - 1);
-
-        // Execute the query
-        const { data: users, error } = await supabaseQuery;
-
-        if (error) {
-            throw error;
-        }
-
-        return res.status(200).json({ users: users || [] });
-
-    } catch (error) {
-        console.error("User search error:", error);
-        return res.status(500).json({
-            error: "Failed to search users",
-            details: error.message
-        });
-    }
-});
-
-// GET Search - Search posts based on title, body, author, tag, and category.
-router.get("/find", async (req, res) => { 
-    try {
-        const { 
-            query, 
-            author, 
-            tag, 
-            category, 
-            page = 1, 
-            limit = 10 
-        } = req.query;
-
-        const offset = (page - 1) * limit;
-
-        // Base query: Only fetch published posts
-        let supabaseQuery = supabase
-            .from("posts")
-            .select(`
-                id, title, body, published_at, 
-                author:users!posts_author_id_fkey (id, username, display_name),
-                category:categories!posts_category_id_fkey (id, name)
-            `)
-            .eq("status", "published") // Ensure only published posts are shown
-            .order("published_at", { ascending: false }) // Default sorting by date
-            .range(offset, offset + limit - 1);
-
-        // Search by post title or content keywords (case-insensitive)
-        if (query) {
-            supabaseQuery = supabaseQuery.or(`
-                title.ilike.%${query}%, 
-                body.ilike.%${query}%
-            `);
-        }
-
-        // Filter by author (username)
-        if (author) {
-            supabaseQuery = supabaseQuery.eq("author.username", author);
-        }
-
-        // Filter by category
-        if (category) {
-            supabaseQuery = supabaseQuery.eq("category_id", category);
-        }
-
-        // Filter by tag
-        if (tag) {
-            supabaseQuery = supabaseQuery.contains("tags.tag.name", [tag]);
-        }
-
-        // Execute the query
-        const { data: posts, error } = await supabaseQuery;
-
-        if (error) {
-            throw error;
-        }
-
-        return res.status(200).json({ posts: posts || [] });
-
-    } catch (error) {
-        console.error("Post search error:", error);
-        return res.status(500).json({
-            error: "Failed to search posts",
             details: error.message
         });
     }

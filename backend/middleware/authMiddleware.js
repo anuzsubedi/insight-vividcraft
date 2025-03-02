@@ -3,7 +3,7 @@ import { supabase } from '../config/supabaseClient.js';
 
 export const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
-    console.log('Auth header:', authHeader);
+    // console.log('Auth header:', authHeader);
 
     if (!authHeader?.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
@@ -15,10 +15,10 @@ export const verifyToken = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-        console.log('Verifying token:', token.substring(0, 20) + '...');
+        // console.log('Verifying token:', token.substring(0, 20) + '...');
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log('Decoded token:', decoded);
+        // console.log('Decoded token:', decoded);
 
         // Verify user exists in database
         const { data: user, error } = await supabase
@@ -42,7 +42,7 @@ export const verifyToken = async (req, res, next) => {
             email: user.email
         };
 
-        console.log('Auth successful for user:', user.username);
+        // console.log('Auth successful for user:', user.username);
         next();
     } catch (error) {
         console.error('Token verification error:', error);

@@ -2,6 +2,7 @@ import api from '../api/axios';
 import { ENDPOINTS } from '../api/endpoints';
 
 export const postService = {
+    // Individual post operations
     async createPost(postData) {
         try {
             const response = await api.post(ENDPOINTS.POSTS.CREATE, postData);
@@ -9,6 +10,16 @@ export const postService = {
         } catch (error) {
             console.error('[CREATE POST] Error:', error);
             throw new Error(error.response?.data?.error || 'Failed to create post');
+        }
+    },
+
+    async getPost(postId) {
+        try {
+            const response = await api.get(ENDPOINTS.POSTS.GET(postId));
+            return response.data;
+        } catch (error) {
+            console.error('[GET POST] Error:', error);
+            throw new Error(error.response?.data?.error || 'Failed to fetch post');
         }
     },
 
@@ -32,28 +43,6 @@ export const postService = {
         }
     },
 
-    async getPosts(filters = {}) {
-        try {
-            const response = await api.get(ENDPOINTS.POSTS.LIST, {
-                params: {
-                    ...filters,
-                    limit: 50 // Increase limit for testing
-                },
-                timeout: 30000
-            });
-            return response.data;
-        } catch (error) {
-            console.error('[GET POSTS] Error:', error);
-            if (!error.response) {
-                throw new Error('Network error. Please check your connection.');
-            }
-            if (error.response.status === 401) {
-                throw new Error('Please log in to view posts');
-            }
-            throw new Error(error.response?.data?.error || 'Failed to fetch posts');
-        }
-    },
-
     async publishPost(postId) {
         try {
             const response = await api.post(ENDPOINTS.POSTS.PUBLISH(postId));
@@ -64,6 +53,74 @@ export const postService = {
         }
     },
 
+    // User posts operations
+    async getUserPosts(username, filters = {}) {
+        try {
+            const {
+                page = 1,
+                limit = 10,
+                category,
+                type,
+                sortBy = "newest"
+            } = filters;
+
+            const response = await api.get(ENDPOINTS.POSTS.GET_USER_POSTS(username), {
+                params: {
+                    page,
+                    limit,
+                    category: category !== "all" ? category : undefined,
+                    type: type !== "all" ? type : undefined,
+                    sortBy
+                },
+                timeout: 30000
+            });
+
+            return {
+                posts: response.data.posts || [],
+                categories: response.data.categories || [],
+                pagination: response.data.pagination || {
+                    total: 0,
+                    page,
+                    limit,
+                    hasMore: false
+                }
+            };
+        } catch (error) {
+            console.error('[GET USER POSTS] Error:', error);
+            if (!error.response) {
+                throw new Error('Network error. Please check your connection.');
+            }
+            if (error.response.status === 404) {
+                throw new Error('User not found');
+            }
+            throw new Error(error.response?.data?.error || 'Failed to fetch user posts');
+        }
+    },
+
+    // My posts operations
+    async getMyPosts(filters = {}) {
+        try {
+            const response = await api.get(ENDPOINTS.POSTS.LIST, {
+                params: {
+                    ...filters,
+                    author: 'me'
+                },
+                timeout: 30000
+            });
+            return response.data;
+        } catch (error) {
+            console.error('[GET MY POSTS] Error:', error);
+            if (!error.response) {
+                throw new Error('Network error. Please check your connection.');
+            }
+            if (error.response.status === 401) {
+                throw new Error('Please log in to view posts');
+            }
+            throw new Error(error.response?.data?.error || 'Failed to fetch posts');
+        }
+    },
+
+    // Scheduled posts operations
     async publishScheduledPosts() {
         try {
             const response = await api.get(ENDPOINTS.POSTS.PUBLISH_SCHEDULED);
@@ -72,15 +129,5 @@ export const postService = {
             console.error('[PUBLISH SCHEDULED] Error:', error);
             throw new Error(error.response?.data?.error || 'Failed to publish scheduled posts');
         }
-    },
-
-    async getPost(postId) {
-        try {
-            const response = await api.get(ENDPOINTS.POSTS.GET(postId));
-            return response.data;
-        } catch (error) {
-            console.error('[GET POST] Error:', error);
-            throw new Error(error.response?.data?.error || 'Failed to fetch post');
-        }
     }
-};
+}

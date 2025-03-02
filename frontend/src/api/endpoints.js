@@ -18,9 +18,9 @@ export const ENDPOINTS = {
     },
     SOCIAL: {
         FOLLOW: (username) => `/api/social/follow/${username}`,
-        UNFOLLOW: (username) => `/api/social/follow/${username}`,
+        UNFOLLOW: (username) => `/api/social/unfollow/${username}`,
         MUTE: (username) => `/api/social/mute/${username}`,
-        UNMUTE: (username) => `/api/social/mute/${username}`,
+        UNMUTE: (username) => `/api/social/unmute/${username}`,
         GET_STATUS: (username) => `/api/social/status/${username}`
     },
     POSTS: {
@@ -28,6 +28,7 @@ export const ENDPOINTS = {
         UPDATE: (id) => `/api/posts/${id}`,
         DELETE: (id) => `/api/posts/${id}`,
         LIST: '/api/posts',
+        GET_USER_POSTS: (username) => `/api/posts/user/${username}`,
         PUBLISH: (id) => `/api/posts/${id}/publish`,
         PUBLISH_DUE: '/api/posts/scheduled/publish-due',
         PUBLISH_SCHEDULED: '/api/posts/scheduled/publish-due',

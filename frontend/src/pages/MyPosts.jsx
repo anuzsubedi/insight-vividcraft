@@ -40,9 +40,9 @@ function MyPosts() {
     try {
       setIsLoading(true);
       const results = await Promise.allSettled([
-        postService.getPosts({ author: "me", status: "published" }),
-        postService.getPosts({ author: "me", status: "draft" }),
-        postService.getPosts({ author: "me", status: "scheduled" }),
+        postService.getMyPosts({ status: "published" }),
+        postService.getMyPosts({ status: "draft" }),
+        postService.getMyPosts({ status: "scheduled" })
       ]);
 
       // Process results
