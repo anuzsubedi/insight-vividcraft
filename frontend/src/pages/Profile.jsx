@@ -24,6 +24,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Portal,
 } from "@chakra-ui/react";
 import { 
   ChevronDownIcon, 
@@ -712,43 +713,50 @@ function Profile() {
                     </VStack>
                     
                     {isOwnProfile && (
-                      <Menu isLazy>
+                      <Menu isLazy gutter={4}>
                         <MenuButton
                           as={IconButton}
                           icon={<HamburgerIcon />}
                           variant="ghost"
                           aria-label="Post options"
                           onClick={(e) => e.stopPropagation()}
+                          position="relative"
+                          zIndex={2}
                         />
-                        <MenuList
-                          border="2px solid"
-                          borderColor="black"
-                          borderRadius="0"
-                          boxShadow="4px 4px 0 black"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MenuItem 
-                            as={Link}
-                            to={`/posts/${post.id}/edit`}
-                            state={{ from: location.pathname }}
-                            icon={<EditIcon />}
+                        <Portal>
+                          <MenuList
+                            border="2px solid"
+                            borderColor="black"
+                            borderRadius="0"
+                            boxShadow="4px 4px 0 black"
+                            onClick={(e) => e.stopPropagation()}
+                            bg="white"
+                            zIndex={1400}
+                            position="relative"
                           >
-                            Edit
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<ViewOffIcon />} 
-                            onClick={() => handleUnpublishPost(post.id)}
-                          >
-                            Move to Drafts
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<DeleteIcon />} 
-                            color="red.500"
-                            onClick={() => handleDeletePost(post.id)}
-                          >
-                            Delete Post
-                          </MenuItem>
-                        </MenuList>
+                            <MenuItem 
+                              as={Link}
+                              to={`/posts/${post.id}/edit`}
+                              state={{ from: location.pathname }}
+                              icon={<EditIcon />}
+                            >
+                              Edit
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<ViewOffIcon />} 
+                              onClick={() => handleUnpublishPost(post.id)}
+                            >
+                              Move to Drafts
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<DeleteIcon />} 
+                              color="red.500"
+                              onClick={() => handleDeletePost(post.id)}
+                            >
+                              Delete Post
+                            </MenuItem>
+                          </MenuList>
+                        </Portal>
                       </Menu>
                     )}
                   </Flex>
