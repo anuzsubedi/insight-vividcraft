@@ -5,6 +5,11 @@ export const ENDPOINTS = {
         SIGNUP: '/api/auth/signup',
         VERIFY_EMAIL: '/api/auth/verify-email',
         VALIDATE_SESSION: '/api/auth/validate-session',
+        REQUEST_PASSWORD_RESET: '/api/auth/request-password-reset',
+        RESET_PASSWORD: '/api/auth/reset-password',
+        REQUEST_EMAIL_CHANGE: '/api/auth/request-email-change',
+        VERIFY_EMAIL_CHANGE: '/api/auth/verify-email-change',
+        UPDATE_PASSWORD: '/api/auth/update-password',
     },
     PROFILE: {
         GET: '/api/profile',

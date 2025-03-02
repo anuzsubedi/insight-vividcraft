@@ -84,5 +84,44 @@ export const authService = {
             console.error('[VALIDATE SESSION] Error:', error);
             return false;
         }
+    },
+
+    async requestEmailChange(newEmail) {
+        try {
+            const response = await api.post('/api/auth/request-email-change', { newEmail });
+            return response.data;
+        } catch (error) {
+            console.error('[EMAIL CHANGE REQUEST] Error:', error);
+            throw error;
+        }
+    },
+
+    async verifyEmailChange(newEmail, code) {
+        try {
+            const response = await api.post('/api/auth/verify-email-change', { newEmail, code });
+            // Update user in state if email change is successful
+            const currentUser = useAuthState.getState().user;
+            useAuthState.getState().setUser({
+                ...currentUser,
+                email: newEmail
+            });
+            return response.data;
+        } catch (error) {
+            console.error('[EMAIL CHANGE VERIFY] Error:', error);
+            throw error;
+        }
+    },
+
+    async updatePassword(oldPassword, newPassword) {
+        try {
+            const response = await api.post('/api/auth/update-password', {
+                oldPassword,
+                newPassword
+            });
+            return response.data;
+        } catch (error) {
+            console.error('[PASSWORD UPDATE] Error:', error);
+            throw error;
+        }
     }
 };

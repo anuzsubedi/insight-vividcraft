@@ -129,6 +129,14 @@ function App() {
                   >
                     My Posts
                   </MenuItem>
+                  <MenuItem
+                    as={Link}
+                    to="/settings"
+                    borderRadius="0"
+                    _hover={{ bg: "paper.100" }}
+                  >
+                   Settings
+                  </MenuItem>
                   <Divider my={2} borderColor="paper.200" />
                   <MenuItem
                     borderRadius="0"

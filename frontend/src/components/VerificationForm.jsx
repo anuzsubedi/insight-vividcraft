@@ -27,7 +27,12 @@ function VerificationForm({ email, onVerify, isLoading }) {
       });
       return;
     }
-    await onVerify(code);
+    try {
+      await onVerify(code);
+    } catch (error) {
+      // The parent component will handle error toasts and loading state
+      console.error('Verification error:', error);
+    }
   };
 
   return (
@@ -69,6 +74,7 @@ function VerificationForm({ email, onVerify, isLoading }) {
               onChange={setCode}
               type="number"
               otp
+              isDisabled={isLoading}
             >
               {[...Array(6)].map((_, i) => (
                 <PinInputField
@@ -92,7 +98,7 @@ function VerificationForm({ email, onVerify, isLoading }) {
             variant="solid"
             isLoading={isLoading}
             loadingText="VERIFYING..."
-            isDisabled={code.length !== 6}
+            isDisabled={code.length !== 6 || isLoading}
           >
             VERIFY EMAIL
           </Button>

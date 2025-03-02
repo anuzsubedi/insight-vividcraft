@@ -4,10 +4,10 @@ import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Update user profile (bio and avatar)
+// Update user profile
 router.put("/update", verifyToken, async (req, res) => {
     try {
-        const { bio, avatarName } = req.body;
+        const { bio, avatarName, username, displayName } = req.body;
         const userId = req.user.userId;
 
         // Validate avatar name format if provided
@@ -20,7 +20,7 @@ router.put("/update", verifyToken, async (req, res) => {
         // Get current user data
         const { data: currentUser, error: getCurrentError } = await supabase
             .from("users")
-            .select("bio, avatar_name")
+            .select("bio, avatar_name, username, display_name")
             .eq("id", userId)
             .single();
 
@@ -29,12 +29,32 @@ router.put("/update", verifyToken, async (req, res) => {
             return res.status(500).json({ error: "Failed to get current user data" });
         }
 
+        // If username is being updated, check if it's already taken
+        if (username && username !== currentUser.username) {
+            const { data: existingUser, error: usernameError } = await supabase
+                .from("users")
+                .select("id")
+                .eq("username", username.toLowerCase())
+                .single();
+
+            if (existingUser) {
+                return res.status(400).json({ error: "Username is already taken" });
+            }
+
+            if (usernameError && usernameError.code !== 'PGRST116') { // PGRST116 means no rows returned
+                console.error("Username Check Error:", usernameError);
+                return res.status(500).json({ error: "Failed to validate username" });
+            }
+        }
+
         // Update with new values or keep existing ones
         const { error: updateError, data: updatedUser } = await supabase
             .from("users")
             .update({
                 bio: bio !== undefined ? bio : currentUser.bio,
-                avatar_name: avatarName !== undefined ? avatarName : currentUser.avatar_name
+                avatar_name: avatarName !== undefined ? avatarName : currentUser.avatar_name,
+                username: username !== undefined ? username.toLowerCase() : currentUser.username,
+                display_name: displayName !== undefined ? displayName : currentUser.display_name
             })
             .eq("id", userId)
             .select()
@@ -90,7 +110,7 @@ const getFollowCounts = async (userId) => {
     }
 };
 
-// Update the "Get user profile by username" route
+// Get user profile by username
 router.get("/:username", verifyToken, async (req, res) => {
     try {
         const { username } = req.params;
@@ -152,7 +172,7 @@ router.get("/:username", verifyToken, async (req, res) => {
     }
 });
 
-// Update the "Get own profile" route
+// Get own profile
 router.get("/", verifyToken, async (req, res) => {
     try {
         const userId = req.user.userId;

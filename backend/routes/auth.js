@@ -1,7 +1,7 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import { supabase } from "../config/supabaseClient.js";
-import { sendVerificationEmail } from "../utils/emailService.js";
+import { sendVerificationEmail, sendEmailChangeNotification, sendPasswordChangeNotification } from "../utils/emailService.js";
 import { generateToken, verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -295,6 +295,175 @@ router.get("/validate-session", verifyToken, async (req, res) => {
             isValid: false,
             error: "Invalid session"
         });
+    }
+});
+
+// Email change request - Sends verification code to new email
+router.post("/request-email-change", verifyToken, async (req, res) => {
+    try {
+        const { newEmail } = req.body;
+        const userId = req.user.userId;
+
+        if (!newEmail) {
+            return res.status(400).json({ error: "New email is required" });
+        }
+
+        const normalizedEmail = newEmail.toLowerCase();
+
+        // Check if email is already in use
+        const { data: existingUser } = await supabase
+            .from("users")
+            .select("id")
+            .eq("email", normalizedEmail)
+            .single();
+
+        if (existingUser) {
+            return res.status(400).json({ error: "Email is already in use" });
+        }
+
+        // Delete any existing email change verifications
+        await supabase
+            .from("email_changes")
+            .delete()
+            .eq("user_id", userId);
+
+        // Generate verification code
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Store the email change request
+        const { error: insertError } = await supabase
+            .from("email_changes")
+            .insert([{
+                user_id: userId,
+                new_email: normalizedEmail,
+                code: verificationCode,
+                expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 minutes expiry
+            }]);
+
+        if (insertError) {
+            return res.status(500).json({ error: "Failed to initiate email change" });
+        }
+
+        // Send verification code to new email
+        await sendVerificationEmail(normalizedEmail, verificationCode);
+
+        return res.status(200).json({ message: "Verification code sent to new email" });
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Verify email change
+router.post("/verify-email-change", verifyToken, async (req, res) => {
+    try {
+        const { newEmail, code } = req.body;
+        const userId = req.user.userId;
+
+        if (!newEmail || !code) {
+            return res.status(400).json({ error: "Email and verification code are required" });
+        }
+
+        const normalizedEmail = newEmail.toLowerCase();
+
+        // Verify the code
+        const { data: emailChange } = await supabase
+            .from("email_changes")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("new_email", normalizedEmail)
+            .eq("code", code)
+            .single();
+
+        if (!emailChange) {
+            return res.status(400).json({ error: "Invalid or expired verification code" });
+        }
+
+        if (new Date(emailChange.expires_at) < new Date()) {
+            return res.status(400).json({ error: "Verification code has expired" });
+        }
+
+        // Get user's current email for notification
+        const { data: user } = await supabase
+            .from("users")
+            .select("email")
+            .eq("id", userId)
+            .single();
+
+        // Update user's email
+        const { error: updateError } = await supabase
+            .from("users")
+            .update({ email: normalizedEmail })
+            .eq("id", userId);
+
+        if (updateError) {
+            return res.status(500).json({ error: "Failed to update email" });
+        }
+
+        // Send notification to old email
+        await sendEmailChangeNotification(user.email, normalizedEmail);
+
+        // Clean up verification
+        await supabase
+            .from("email_changes")
+            .delete()
+            .eq("user_id", userId);
+
+        return res.status(200).json({
+            message: "Email updated successfully"
+        });
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Update password
+router.post("/update-password", verifyToken, async (req, res) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
+        const userId = req.user.userId;
+
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({ error: "Old and new passwords are required" });
+        }
+
+        // Get user's current password hash
+        const { data: user } = await supabase
+            .from("users")
+            .select("password_hash, email")
+            .eq("id", userId)
+            .single();
+
+        // Verify old password
+        const isValidPassword = await bcrypt.compare(oldPassword, user.password_hash);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: "Current password is incorrect" });
+        }
+
+        // Check if new password is same as old
+        const isSamePassword = await bcrypt.compare(newPassword, user.password_hash);
+        if (isSamePassword) {
+            return res.status(400).json({ error: "New password must be different from current password" });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        const { error: updateError } = await supabase
+            .from("users")
+            .update({ password_hash: hashedPassword })
+            .eq("id", userId);
+
+        if (updateError) {
+            return res.status(500).json({ error: "Failed to update password" });
+        }
+
+        // Send notification email about password change
+        await sendPasswordChangeNotification(user.email);
+
+        return res.status(200).json({ message: "Password updated successfully" });
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
     }
 });
 
