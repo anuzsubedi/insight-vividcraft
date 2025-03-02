@@ -18,7 +18,6 @@ import {
   Image,
   Spinner,
   Badge,
-  Input,
 } from "@chakra-ui/react";
 import { EditIcon, CheckIcon, CloseIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
@@ -29,10 +28,6 @@ import AvatarSelector from "../components/AvatarSelector";
 function Profile() {
   const [profile, setProfile] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [isEditingUserName, setIsEditingUserName] = useState(false);
-  const [editedName, setEditedName] = useState("");  
-  const [editedUserName, setEditedUserName] = useState("");
   const [editedBio, setEditedBio] = useState("");
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
@@ -45,8 +40,6 @@ function Profile() {
       const response = await profileService.getProfile();
       setProfile(response.profile);
       setEditedBio(response.profile.bio || "");
-      setEditedName(response.profile.displayName || "");
-      setEditedUserName(response.profile.username || "");
       setIsLoading(false);
     } catch (error) {
       toast({
@@ -105,46 +98,6 @@ function Profile() {
         status: "error",
         duration: 3000,
       });
-    }
-  };
-
-  const handleUpdateName = async () => {
-    try {
-        await profileService.updateProfile({ displayName: editedName });
-        setProfile((prev) => ({ ...prev, displayName: editedName }));
-        setIsEditingName(false);
-        toast({
-            title: "Name Updated!",
-            status: "success",
-            duration: 3000,
-        });
-    } catch (error) {
-        toast({
-            title: "Error updating name",
-            description: error.message,
-            status: "error",
-            duration: 3000,
-        });
-    }
-  };
-
-  const handleUpdateUserName = async () => {
-    try {
-        await profileService.updateProfile({ username: editedUserName });
-        setProfile((prev) => ({ ...prev, username: editedUserName }));
-        setIsEditingUserName(false);
-        toast({
-            title: "Name Updated!",
-            status: "success",
-            duration: 3000,
-        });
-    } catch (error) {
-        toast({
-            title: "Error updating name",
-            description: error.message,
-            status: "error",
-            duration: 3000,
-        });
     }
   };
 
@@ -245,91 +198,23 @@ function Profile() {
                   aria-label="Change avatar"
                 />
               </Box>
-
-               <HStack> {/*update profile DisplayName */}
-                  {!isEditingName ? (
-                      <>
-                          <Heading size="xl">{profile.displayName}</Heading>
-                          <IconButton
-                              size="sm"
-                              icon={<EditIcon />}
-                              onClick={() => setIsEditingName(true)}
-                              variant="ghost"
-                          />
-                      </>
-                  ) : (
-                      <>
-                          <Textarea
-                              value={editedName}
-                              onChange={(e) => setEditedName(e.target.value)}
-                              size="lg"
-                              rows={1}
-                              autoFocus
-                          />
-                          <HStack>
-                              <IconButton
-                                  size="sm"
-                                  icon={<CheckIcon />}
-                                  onClick={handleUpdateName} // Guarda los cambios
-                                  colorScheme="green"
-                              />
-                              <IconButton
-                                  size="sm"
-                                  icon={<CloseIcon />}
-                                  onClick={() => {
-                                      setIsEditingName(false); // Cancela la edición
-                                      setEditedName(profile.displayName); // Restaura el valor original
-                                  }}
-                                  colorScheme="red"
-                              />
-                          </HStack>
-                      </>
-                  )}
-              </HStack>
-
-              <HStack>{/*update profile userName */}
-                      {!isEditingUserName ? (
-                      <>
-                          <Text color="paper.400" fontSize="lg">
-                            @{profile.username}
-                          </Text>
-                          <IconButton
-                              size="sm"
-                              icon={<EditIcon />}
-                              onClick={() => setIsEditingUserName(true)}
-                              variant="ghost"
-                          />
-                      </>
-                  ) : (
-                      <>
-                          <Textarea
-                              value={editedUserName}
-                              onChange={(e) => setEditedUserName(e.target.value)}
-                              size="lg"
-                              rows={1}
-                              autoFocus
-                          />
-                          <HStack>
-                              <IconButton
-                                  size="sm"
-                                  icon={<CheckIcon />}
-                                  onClick={handleUpdateUserName}
-                                  colorScheme="green"
-                              />
-                              <IconButton
-                                  size="sm"
-                                  icon={<CloseIcon />}
-                                  onClick={() => {
-                                      setIsEditingUserName(false);
-                                      setEditeduserName(profile.username); 
-                                  }}
-                                  colorScheme="red"
-                              />
-                          </HStack>
-                      </>
-                  )}
-
-                  
+              <Heading size="xl">{profile.displayName}</Heading>
+              <Text color="paper.400" fontSize="lg">
+                @{profile.username}
+              </Text>
+              <HStack spacing={8} justify="center" w="100%">
+                <VStack>
+                  <Text fontSize="2xl" fontWeight="bold">
+                    {profile.followerCount || 0}
+                  </Text>
+                  <Text color="paper.400">Followers</Text>
+                </VStack>
+                <VStack>
+                  <Text fontSize="2xl" fontWeight="bold">
+                    {profile.followingCount || 0}
+                  </Text>
+                  <Text color="paper.400">Following</Text>
+                </VStack>
               </HStack>
             </VStack>
 
