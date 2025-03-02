@@ -613,4 +613,73 @@ router.get("/search", async (req, res) => {
         });
     }
 });
+
+// GET Search - Search posts based on title, body, author, tag, and category.
+router.get("/find", async (req, res) => { 
+    try {
+        const { 
+            query, 
+            author, 
+            tag, 
+            category, 
+            page = 1, 
+            limit = 10 
+        } = req.query;
+
+        const offset = (page - 1) * limit;
+
+        // Base query: Only fetch published posts
+        let supabaseQuery = supabase
+            .from("posts")
+            .select(`
+                id, title, body, published_at, 
+                author:users!posts_author_id_fkey (id, username, display_name),
+                category:categories!posts_category_id_fkey (id, name),
+                tags:post_tags(tag:tags(id, name))
+            `)
+            .eq("status", "published") // Ensure only published posts are shown
+            .order("published_at", { ascending: false }) // Default sorting by date
+            .range(offset, offset + limit - 1);
+
+        // Search by post title or content keywords (case-insensitive)
+        if (query) {
+            supabaseQuery = supabaseQuery.or(`
+                title.ilike.%${query}%, 
+                body.ilike.%${query}%
+            `);
+        }
+
+        // Filter by author (username)
+        if (author) {
+            supabaseQuery = supabaseQuery.eq("author.username", author);
+        }
+
+        // Filter by category
+        if (category) {
+            supabaseQuery = supabaseQuery.eq("category_id", category);
+        }
+
+        // Filter by tag
+        if (tag) {
+            supabaseQuery = supabaseQuery.contains("tags.tag.name", [tag]);
+        }
+
+        // Execute the query
+        const { data: posts, error } = await supabaseQuery;
+
+        if (error) {
+            throw error;
+        }
+
+        return res.status(200).json({ posts: posts || [] });
+
+    } catch (error) {
+        console.error("Post search error:", error);
+        return res.status(500).json({
+            error: "Failed to search posts",
+            details: error.message
+        });
+    }
+});
+
 export default router;
