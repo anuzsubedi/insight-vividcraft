@@ -26,7 +26,7 @@ export const ENDPOINTS = {
         PUBLISH: (id) => `/api/posts/${id}/publish`,
         PUBLISH_DUE: '/api/posts/scheduled/publish-due',
         PUBLISH_SCHEDULED: '/api/posts/scheduled/publish-due',
-        GET: (slug) => `/api/posts/${slug}`,
+        GET: (id) => `/api/posts/${id}`,
     },
     CATEGORIES: {
         LIST: '/api/categories',

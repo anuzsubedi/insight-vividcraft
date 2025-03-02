@@ -22,8 +22,8 @@ import {
   Spinner,
   Center,
 } from "@chakra-ui/react";
-import { Link } from "react-router-dom";
-import { ArrowBackIcon, SettingsIcon } from "@chakra-ui/icons";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowBackIcon, EditIcon } from "@chakra-ui/icons";
 import { postService } from "../services/postService";
 import PropTypes from "prop-types";
 
@@ -93,9 +93,9 @@ function MyPosts() {
     loadPosts();
   }, [loadPosts]);
 
-  const handleDelete = async (slug) => {
+  const handleDelete = async (postId) => {
     try {
-      await postService.deletePost(slug);
+      await postService.deletePost(postId);
       toast({
         title: "Post deleted successfully",
         status: "success",
@@ -112,9 +112,9 @@ function MyPosts() {
     }
   };
 
-  const handlePublish = async (slug) => {
+  const handlePublish = async (postId) => {
     try {
-      await postService.updatePost(slug, { status: "published" });
+      await postService.updatePost(postId, { status: "published" });
       toast({
         title: "Post published successfully",
         status: "success",
@@ -239,61 +239,126 @@ function MyPosts() {
 }
 
 const PostsList = ({ posts, onDelete, onPublish }) => {
-  if (posts.length === 0) {
-    return <Text color="paper.400">No posts found</Text>;
-  }
-
+  const location = useLocation();
+  
   return (
     <VStack spacing={4} align="stretch">
       {posts.map((post) => (
-        <Box key={post.id} p={4} border="2px solid" borderColor="paper.200">
+        <Box
+          key={post.id}
+          p={6}
+          border="2px solid"
+          borderColor="black"
+          bg="white"
+          transform="rotate(0.5deg)"
+          boxShadow="5px 5px 0 black"
+          _hover={{
+            transform: "rotate(0.5deg) translate(-3px, -3px)",
+            boxShadow: "8px 8px 0 black",
+          }}
+          transition="all 0.2s"
+        >
           <HStack justify="space-between" align="start">
-            <VStack align="start" spacing={2}>
+            <VStack align="start" spacing={3} flex="1">
               <Heading size="md">{post.title}</Heading>
-              <HStack>
-                <Badge>{post.type}</Badge>
+              <HStack wrap="wrap">
                 <Badge
-                  colorScheme={
-                    post.status === "published"
-                      ? "green"
-                      : post.status === "draft"
-                      ? "gray"
-                      : "blue"
-                  }
+                  px={2}
+                  py={1}
+                  bg="paper.100"
+                  color="paper.800"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  border="1px solid"
+                  borderColor="paper.300"
                 >
-                  {post.status}
+                  {post.type}
                 </Badge>
                 {post.category && (
-                  <Badge colorScheme="purple">{post.category.name}</Badge>
+                  <Badge
+                    px={2}
+                    py={1}
+                    bg="green.100"
+                    color="green.800"
+                    fontWeight="bold"
+                    textTransform="uppercase"
+                    border="1px solid"
+                    borderColor="green.300"
+                  >
+                    {post.category.name}
+                  </Badge>
                 )}
                 {post.tags && post.tags.map((tag) => (
-                  <Badge key={tag} colorScheme="teal">
+                  <Badge
+                    key={tag}
+                    px={2}
+                    py={1}
+                    bg="teal.100"
+                    color="teal.800"
+                    fontWeight="bold"
+                    textTransform="uppercase"
+                    border="1px solid"
+                    borderColor="teal.300"
+                  >
                     {tag}
                   </Badge>
                 ))}
               </HStack>
-              {post.status === "scheduled" && (
-                <Text fontSize="sm" color="paper.400">
-                  Scheduled for: {new Date(post.scheduled_for).toLocaleString()}
-                </Text>
-              )}
+              <Text noOfLines={3} color="paper.600">
+                {post.body}
+              </Text>
+              <HStack>
+                <Button
+                  as={Link}
+                  to={`/posts/${post.id}`}
+                  state={{ from: location.pathname }}
+                  size="sm"
+                  variant="outline"
+                  borderWidth="2px"
+                  borderColor="black"
+                  boxShadow="2px 2px 0 black"
+                  _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
+                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
+                >
+                  View Post
+                </Button>
+                <Button
+                  as={Link}
+                  to={`/posts/${post.id}/edit`}
+                  state={{ from: location.pathname }}
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<EditIcon />}
+                  borderWidth="2px"
+                  borderColor="black"
+                  boxShadow="2px 2px 0 black"
+                  _hover={{ transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0 black" }}
+                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
+                >
+                  Edit
+                </Button>
+              </HStack>
             </VStack>
+            
             <Menu>
               <MenuButton
                 as={IconButton}
-                icon={<SettingsIcon />}
+                icon={<EditIcon />}
                 variant="ghost"
+                aria-label="Post options"
               />
-              <MenuList>
-                <MenuItem as={Link} to={`/posts/${post.slug}/edit`}>
-                  Edit
-                </MenuItem>
+              <MenuList
+                border="2px solid"
+                borderColor="black"
+                borderRadius="0"
+                boxShadow="4px 4px 0 black"
+              >
                 {post.status !== "published" && (
-                  <MenuItem onClick={() => onPublish(post.slug)}>
+                  <MenuItem onClick={() => onPublish(post.id)}>
                     Publish Now
                   </MenuItem>
                 )}
-                <MenuItem color="red.500" onClick={() => onDelete(post.slug)}>
+                <MenuItem color="red.500" onClick={() => onDelete(post.id)}>
                   Delete
                 </MenuItem>
               </MenuList>

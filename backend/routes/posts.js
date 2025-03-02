@@ -29,6 +29,7 @@ async function generateUniqueSlug(title) {
     return slug;
 }
 
+// Create post
 router.post("/", verifyToken, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
@@ -119,15 +120,16 @@ router.post("/", verifyToken, async (req, res) => {
         });
 
     } catch (error) {
+        console.error('Create post error:', error);
         return res.status(500).json({ error: "Failed to create post" });
     }
 });
 
-// In the PUT /:slug route, update the validation and scheduling logic:
-router.put("/:slug", verifyToken, async (req, res) => {
+// Update post
+router.put("/:id", verifyToken, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
-        const slug = req.params.slug;
+        const postId = req.params.id;
 
         // Validate scheduled posts have a future date
         if (status === 'scheduled') {
@@ -147,7 +149,7 @@ router.put("/:slug", verifyToken, async (req, res) => {
         const { data: existingPost, error: fetchError } = await supabase
             .from('posts')
             .select('*')
-            .eq('slug', slug)
+            .eq('id', postId)
             .eq('author_id', req.user.userId)
             .single();
 
@@ -235,7 +237,8 @@ router.put("/:slug", verifyToken, async (req, res) => {
     }
 });
 
-router.get("/:slug", async (req, res) => {
+// Get post by ID
+router.get("/:id", async (req, res) => {
     try {
         const { data: post, error } = await supabase
             .from('posts')
@@ -244,7 +247,7 @@ router.get("/:slug", async (req, res) => {
                 author:users(id, username, display_name),
                 category:categories(id, name)
             `)
-            .eq('slug', req.params.slug)
+            .eq('id', req.params.id)
             .single();
 
         if (error || !post) {
@@ -257,7 +260,69 @@ router.get("/:slug", async (req, res) => {
     }
 });
 
-// Update the GET posts route with better error handling
+// Delete post
+router.delete("/:id", verifyToken, async (req, res) => {
+    try {
+        const { data: post, error: fetchError } = await supabase
+            .from('posts')
+            .select('id')
+            .eq('id', req.params.id)
+            .eq('author_id', req.user.userId)
+            .single();
+
+        if (fetchError || !post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const { error: deleteError } = await supabase
+            .from('posts')
+            .delete()
+            .eq('id', post.id);
+
+        if (deleteError) {
+            return res.status(500).json({ error: "Failed to delete post" });
+        }
+
+        return res.status(200).json({ message: "Post deleted successfully" });
+    } catch (error) {
+        return res.status(500).json({ error: "Failed to delete post" });
+    }
+});
+
+// Publish post
+router.post("/:id/publish", verifyToken, async (req, res) => {
+    try {
+        const { data: post, error: fetchError } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('id', req.params.id)
+            .eq('author_id', req.user.userId)
+            .single();
+
+        if (fetchError || !post) {
+            return res.status(404).json({ error: "Post not found" });
+        }
+
+        const { error: updateError } = await supabase
+            .from('posts')
+            .update({
+                status: 'published',
+                published_at: new Date().toISOString(),
+                scheduled_for: null
+            })
+            .eq('id', post.id);
+
+        if (updateError) {
+            return res.status(500).json({ error: "Failed to publish post" });
+        }
+
+        return res.status(200).json({ message: "Post published successfully" });
+    } catch (error) {
+        return res.status(500).json({ error: "Failed to publish post" });
+    }
+});
+
+// Get posts with filters
 router.get("/", async (req, res, next) => {
     try {
         // If requesting "my posts", require authentication
@@ -325,66 +390,6 @@ router.get("/", async (req, res, next) => {
             error: "Failed to fetch posts",
             details: error.message
         });
-    }
-});
-
-router.delete("/:slug", verifyToken, async (req, res) => {
-    try {
-        const { data: post, error: fetchError } = await supabase
-            .from('posts')
-            .select('id')
-            .eq('slug', req.params.slug)
-            .eq('author_id', req.user.userId)
-            .single();
-
-        if (fetchError || !post) {
-            return res.status(404).json({ error: "Post not found" });
-        }
-
-        const { error: deleteError } = await supabase
-            .from('posts')
-            .delete()
-            .eq('id', post.id);
-
-        if (deleteError) {
-            return res.status(500).json({ error: "Failed to delete post" });
-        }
-
-        return res.status(200).json({ message: "Post deleted successfully" });
-    } catch (error) {
-        return res.status(500).json({ error: "Failed to delete post" });
-    }
-});
-
-router.post("/:slug/publish", verifyToken, async (req, res) => {
-    try {
-        const { data: post, error: fetchError } = await supabase
-            .from('posts')
-            .select('*')
-            .eq('slug', req.params.slug)
-            .eq('author_id', req.user.userId)
-            .single();
-
-        if (fetchError || !post) {
-            return res.status(404).json({ error: "Post not found" });
-        }
-
-        const { error: updateError } = await supabase
-            .from('posts')
-            .update({
-                status: 'published',
-                published_at: new Date().toISOString(),
-                scheduled_for: null
-            })
-            .eq('id', post.id);
-
-        if (updateError) {
-            return res.status(500).json({ error: "Failed to publish post" });
-        }
-
-        return res.status(200).json({ message: "Post published successfully" });
-    } catch (error) {
-        return res.status(500).json({ error: "Failed to publish post" });
     }
 });
 
