@@ -75,6 +75,7 @@ function Profile() {
   const [filteredPosts, setFilteredPosts] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [totalPosts, setTotalPosts] = useState(0);
   
   // Intersection observer for infinite scrolling
   const { ref, inView } = useInView({
@@ -93,14 +94,27 @@ function Profile() {
         type: postType !== "all" ? postType : undefined
       });
       
-      if (!response.posts || response.posts.length === 0) {
+      // Check if we got a valid response with posts array
+      if (!response || !response.posts) {
         setHasMore(false);
         if (page === 1) {
           setPosts([]);
+          setFilteredPosts([]);
         }
+        return;
+      }
+
+      // Update pagination state
+      if (response.pagination) {
+        setHasMore(response.pagination.hasMore);
+        setTotalPosts(response.pagination.total);
+      }
+
+      // Update posts list
+      if (page === 1) {
+        setPosts(response.posts);
       } else {
         setPosts(prevPosts => [...prevPosts, ...response.posts]);
-        setPage(prevPage => prevPage + 1);
       }
       
       // Set available categories on first load
@@ -108,31 +122,46 @@ function Profile() {
         setAvailableCategories(response.categories);
       }
     } catch (error) {
+      console.error("Error loading posts:", error);
       toast({
         title: "Error loading posts",
         description: error.message,
         status: "error",
         duration: 3000,
       });
+      // Reset hasMore on error to prevent infinite loading attempts
+      setHasMore(false);
     } finally {
       setIsLoadingPosts(false);
     }
   }, [username, page, selectedCategory, postType, hasMore, isLoadingPosts, toast]);
 
-  // Reset posts when filters change
+  // Reset and reload posts when filters change
   useEffect(() => {
+    if (!username) return;
     setPosts([]);
+    setFilteredPosts([]);
     setPage(1);
     setHasMore(true);
-    loadMorePosts(); // Load first page immediately after reset
-  }, [selectedCategory, postType, loadMorePosts]);
+    // Use setTimeout to ensure state updates have propagated
+    setTimeout(() => {
+      loadMorePosts();
+    }, 0);
+  }, [selectedCategory, postType, username, loadMorePosts]);
 
   // Load more posts when scrolling to bottom
   useEffect(() => {
-    if (inView && !isLoadingPosts && hasMore && page > 1) {
+    if (inView && !isLoadingPosts && hasMore) {
+      setPage(prev => prev + 1);
+    }
+  }, [inView, isLoadingPosts, hasMore]);
+
+  // Effect to load more posts when page changes
+  useEffect(() => {
+    if (page > 1) {
       loadMorePosts();
     }
-  }, [inView, isLoadingPosts, hasMore, page, loadMorePosts]);
+  }, [page, loadMorePosts]);
 
   // Initial profile fetch
   const fetchProfile = useCallback(async () => {
@@ -174,6 +203,7 @@ function Profile() {
       fetchProfile();
       // Reset posts when username changes
       setPosts([]);
+      setFilteredPosts([]);
       setPage(1);
       setHasMore(true);
       // Initial load will happen through the filter effect
@@ -182,6 +212,12 @@ function Profile() {
 
   // Effect to filter and sort posts
   useEffect(() => {
+    // Don't filter if we don't have any posts
+    if (!posts.length) {
+      setFilteredPosts([]);
+      return;
+    }
+
     let filtered = [...posts];
     filtered.sort((a, b) => {
       const dateA = new Date(a.published_at).getTime();
@@ -745,6 +781,11 @@ function Profile() {
               </HStack>
             </Flex>
 
+            {/* Posts stats */}
+            <Text color="paper.600" fontSize="md">
+              {totalPosts === 0 ? 'No posts yet' : `${totalPosts} post${totalPosts === 1 ? '' : 's'}`}
+            </Text>
+
             {filteredPosts.map((post) => (
               <Box
                 key={post.id}
@@ -864,8 +905,8 @@ function Profile() {
               </Box>
             ))}
             
-            {/* Loading indicator */}
-            {isLoadingPosts && page === 1 && (
+            {/* Loading indicator - Only show on initial load */}
+            {isLoadingPosts && page === 1 && filteredPosts.length === 0 && (
               <Center py={4}>
                 <Spinner size="lg" />
               </Center>
@@ -878,10 +919,10 @@ function Profile() {
               </Center>
             )}
             
-            {/* Intersection observer target */}
+            {/* Intersection observer target - Only show if we have more posts to load */}
             {hasMore && !isLoadingPosts && <Box ref={ref} h="20px" />}
             
-            {/* No posts message */}
+            {/* No posts message - Only show when not loading and no posts */}
             {!isLoadingPosts && filteredPosts.length === 0 && (
               <Box p={6} border="2px dashed" borderColor="paper.300" textAlign="center">
                 <Text color="paper.400" fontSize="lg">

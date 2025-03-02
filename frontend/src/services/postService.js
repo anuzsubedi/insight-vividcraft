@@ -56,10 +56,15 @@ export const postService = {
 
     async getUserPosts(username, filters = {}) {
         try {
+            console.log('Fetching user posts:', { username, filters });
             const response = await api.get(`/api/posts/user/${username}`, {
-                params: filters,
+                params: {
+                    ...filters,
+                    limit: 10 // Set a reasonable limit per page
+                },
                 timeout: 30000
             });
+            console.log('User posts response:', response.data);
             return response.data;
         } catch (error) {
             console.error('[GET USER POSTS] Error:', error);

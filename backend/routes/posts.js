@@ -580,7 +580,7 @@ router.get("/find", async (req, res) => {
 
         // Filter by tag
         if (tag) {
-            supabaseQuery = supabaseQuery.contains("tags.tag.name", [tag]);
+            supabaseQuery = supabaseQuery.contains("tags", [tag.toLowerCase()]);
         }
 
         // Execute the query
@@ -605,8 +605,10 @@ router.get("/find", async (req, res) => {
 router.get("/user/:username", async (req, res) => {
     try {
         const { username } = req.params;
-        const { category, type = "all", limit = 20, page = 1 } = req.query;
+        const { category, type = "all", limit = 10, page = 1 } = req.query;
         const offset = (page - 1) * limit;
+
+        console.log('Getting posts for user:', { username, category, type, limit, page, offset });
 
         // First get the user ID
         const { data: user, error: userError } = await supabase
@@ -616,6 +618,7 @@ router.get("/user/:username", async (req, res) => {
             .single();
 
         if (userError || !user) {
+            console.error('User not found:', userError);
             return res.status(404).json({ error: "User not found" });
         }
 
@@ -626,30 +629,32 @@ router.get("/user/:username", async (req, res) => {
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
                 category:categories!posts_category_id_fkey (id, name)
-            `)
+            `, { count: 'exact' })  // Add count to get total number of records
             .eq("author_id", user.id)
-            .eq("status", "published")
-            .range(offset, offset + limit - 1);
+            .eq("status", "published");
 
         // Apply filters
-        if (category) {
+        if (category && category !== "all") {
             query = query.eq("category_id", category);
         }
         
-        if (type !== "all") {
+        if (type && type !== "all") {
             query = query.eq("type", type);
         }
 
         // Order by most recent first
-        query = query.order("published_at", { ascending: false });
+        query = query.order("published_at", { ascending: false })
+            .range(offset, offset + limit - 1);
 
-        const { data: posts, error } = await query;
+        console.log('Executing query for user posts');
+        const { data: posts, error, count } = await query;
 
         if (error) {
+            console.error('Error fetching posts:', error);
             throw error;
         }
 
-        // Get unique categories for this user's posts
+        // Get unique categories for this user's posts (for filters)
         const { data: userCategories } = await supabase
             .from("posts")
             .select(`
@@ -659,14 +664,28 @@ router.get("/user/:username", async (req, res) => {
             .eq("status", "published");
 
         const uniqueCategories = userCategories
-            ? Array.from(new Set(userCategories
-                .filter(post => post.category)
-                .map(post => post.category)))
+            ? Array.from(new Set(
+                userCategories
+                    .filter(post => post.category)
+                    .map(post => post.category)
+            ))
             : [];
+
+        console.log('Returning posts:', { 
+            count, 
+            postsLength: posts?.length, 
+            categoriesLength: uniqueCategories?.length 
+        });
 
         return res.status(200).json({ 
             posts: posts || [],
-            categories: uniqueCategories
+            categories: uniqueCategories,
+            pagination: {
+                total: count || 0,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                hasMore: count > offset + posts.length
+            }
         });
 
     } catch (error) {
