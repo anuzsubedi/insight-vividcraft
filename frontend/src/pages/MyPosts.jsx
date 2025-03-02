@@ -249,7 +249,7 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
           <HStack justify="space-between" align="start">
             <VStack align="start" spacing={2}>
               <Heading size="md">{post.title}</Heading>
-              <HStack>
+              <HStack wrap="wrap" spacing={2}>
                 <Badge>{post.type}</Badge>
                 <Badge
                   colorScheme={
@@ -265,6 +265,11 @@ const PostsList = ({ posts, onDelete, onPublish }) => {
                 {post.category && (
                   <Badge colorScheme="purple">{post.category.name}</Badge>
                 )}
+                {post.tags && post.tags.map((tag) => (
+                  <Badge key={tag} colorScheme="teal">
+                    {tag}
+                  </Badge>
+                ))}
               </HStack>
               {post.status === "scheduled" && (
                 <Text fontSize="sm" color="paper.400">
@@ -311,6 +316,7 @@ PostsList.propTypes = {
         name: PropTypes.string.isRequired,
       }),
       scheduled_for: PropTypes.string,
+      tags: PropTypes.arrayOf(PropTypes.string),
     })
   ).isRequired,
   onDelete: PropTypes.func.isRequired,
