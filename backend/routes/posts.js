@@ -452,15 +452,26 @@ router.get("/feed", async (req, res) => {
                 *,
                 author:users!posts_author_id_fkey (id, username, display_name),
                 category:categories!posts_category_id_fkey (id, name),
-                tags:post_tags(tag:tags(id, name))
-            `)
+                tags:post_tags(tag:tags(id, name)),
+                comments:post_comments(count),
+                likes:post_likes(count)
+            `, { count: 'exact' }) // Count comments and likes using exact method
             .eq("status", "published")
-            .order("published_at", { ascending: false }) // Default: Most recent first
+            //.order("published_at", { ascending: false }) // Default: Most recent first
             .range(offset, offset + limit - 1);
 
-        if (filter === "trending") {
-            // Add logic for trending posts (if there’s an engagement metric)
-            query = query.order("views", { ascending: false }); // Example sorting by views
+        switch (filter) {
+            case "most-liked":
+                query = query.order("likes", { ascending: false });
+                break;
+            case "most-commented":
+                query = query.order("comments", { ascending: false });
+                break;
+            case "chronological":
+                query = query.order("published_at", { ascending: true });
+                break;
+            default:
+                query = query.order("published_at", { ascending: false });
         }
 
         if (category) {
