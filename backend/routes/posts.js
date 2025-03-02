@@ -575,5 +575,42 @@ router.get("/filter", async (req, res) => {
     }
 });
 
+// GET Search - Search users based on username, display_name, or email.
+router.get("/search", async (req, res) => {
+    try {
+        const { query, page = 1, limit = 10 } = req.query;
+        
+        // Validate that a search query is provided
+        if (!query || query.trim() === "") {
+            return res.status(400).json({ error: "Search query is required" });
+        }
 
+        const offset = (page - 1) * limit;
+
+        // Build the search query using ILIKE for case-insensitive matching
+        let supabaseQuery = supabase
+            .from("users")
+            .select("id, username, display_name, avatar_name, bio")
+            .or(
+                `username.ilike.%${query}%, display_name.ilike.%${query}%, email.ilike.%${query}%`
+            )
+            .range(offset, offset + limit - 1);
+
+        // Execute the query
+        const { data: users, error } = await supabaseQuery;
+
+        if (error) {
+            throw error;
+        }
+
+        return res.status(200).json({ users: users || [] });
+
+    } catch (error) {
+        console.error("User search error:", error);
+        return res.status(500).json({
+            error: "Failed to search users",
+            details: error.message
+        });
+    }
+});
 export default router;
