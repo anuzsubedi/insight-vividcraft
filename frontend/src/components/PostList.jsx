@@ -66,7 +66,7 @@ function PostList() {
             <Text fontSize="xl" fontWeight="bold">
               {post.title}
             </Text>
-            <HStack wrap="wrap" spacing={2}>
+            <HStack>
               <Badge>{post.type}</Badge>
               <Badge
                 colorScheme={
@@ -79,14 +79,6 @@ function PostList() {
               >
                 {post.status}
               </Badge>
-              {post.category && (
-                <Badge colorScheme="purple">{post.category.name}</Badge>
-              )}
-              {post.tags && post.tags.map((tag) => (
-                <Badge key={tag} colorScheme="teal">
-                  {tag}
-                </Badge>
-              ))}
             </HStack>
             <Text noOfLines={2}>{post.body}</Text>
             <HStack>
