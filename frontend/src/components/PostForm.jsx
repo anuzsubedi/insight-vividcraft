@@ -59,7 +59,7 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
     };
 
     fetchCategories();
-  }, []);
+  }, [toast]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -93,6 +93,8 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
           formData.status === "scheduled"
             ? formData.scheduledFor || null
             : null,
+        // Ensure tags is an array
+        tags: formData.tags || []
       };
 
       // In the POST and PUT routes, add this validation before processing
@@ -108,11 +110,8 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
       }
 
       await onSubmit(submitData);
-      toast({
-        title: `Post ${isEditing ? "updated" : "created"} successfully!`,
-        status: "success",
-        duration: 3000,
-      });
+      // Clear any existing errors after successful submission
+      setErrors({});
     } catch (error) {
       toast({
         title: "Error",
@@ -139,10 +138,11 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
   const handleAddTag = (e) => {
     if (e.key === "Enter" && tagInput.trim()) {
       e.preventDefault();
-      if (!formData.tags.includes(tagInput.trim())) {
+      const newTag = tagInput.trim().toLowerCase();
+      if (!formData.tags.includes(newTag)) {
         setFormData((prev) => ({
           ...prev,
-          tags: [...prev.tags, tagInput.trim()],
+          tags: [...prev.tags, newTag],
         }));
       }
       setTagInput("");

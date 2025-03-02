@@ -21,9 +21,10 @@ import {
   Tab,
   Spinner,
   Center,
+  Portal,
 } from "@chakra-ui/react";
-import { Link } from "react-router-dom";
-import { ArrowBackIcon, SettingsIcon } from "@chakra-ui/icons";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowBackIcon, EditIcon, CheckIcon, DeleteIcon, HamburgerIcon, ViewOffIcon } from "@chakra-ui/icons";
 import { postService } from "../services/postService";
 import PropTypes from "prop-types";
 
@@ -93,9 +94,9 @@ function MyPosts() {
     loadPosts();
   }, [loadPosts]);
 
-  const handleDelete = async (slug) => {
+  const handleDelete = async (postId) => {
     try {
-      await postService.deletePost(slug);
+      await postService.deletePost(postId);
       toast({
         title: "Post deleted successfully",
         status: "success",
@@ -112,9 +113,9 @@ function MyPosts() {
     }
   };
 
-  const handlePublish = async (slug) => {
+  const handlePublish = async (postId) => {
     try {
-      await postService.updatePost(slug, { status: "published" });
+      await postService.publishPost(postId); // Use publishPost instead of updatePost
       toast({
         title: "Post published successfully",
         status: "success",
@@ -125,6 +126,25 @@ function MyPosts() {
       toast({
         title: "Error publishing post",
         description: error.response?.data?.error || "Failed to publish post",
+        status: "error",
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleMoveToDrafts = async (postId) => {
+    try {
+      await postService.updatePost(postId, { status: "draft" });
+      toast({
+        title: "Post moved to drafts",
+        status: "success",
+        duration: 3000,
+      });
+      loadPosts();
+    } catch (error) {
+      toast({
+        title: "Error moving post to drafts",
+        description: error.response?.data?.error || "Failed to move post to drafts",
         status: "error",
         duration: 5000,
       });
@@ -213,6 +233,7 @@ function MyPosts() {
                     posts={publishedPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -220,6 +241,7 @@ function MyPosts() {
                     posts={draftPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
                 <TabPanel>
@@ -227,6 +249,7 @@ function MyPosts() {
                     posts={scheduledPosts}
                     onDelete={handleDelete}
                     onPublish={handlePublish}
+                    onMoveToDrafts={handleMoveToDrafts}
                   />
                 </TabPanel>
               </TabPanels>
@@ -238,65 +261,134 @@ function MyPosts() {
   );
 }
 
-const PostsList = ({ posts, onDelete, onPublish }) => {
-  if (posts.length === 0) {
-    return <Text color="paper.400">No posts found</Text>;
-  }
-
+const PostsList = ({ posts, onDelete, onPublish, onMoveToDrafts }) => {
+  const location = useLocation();
+  
   return (
     <VStack spacing={4} align="stretch">
       {posts.map((post) => (
-        <Box key={post.id} p={4} border="2px solid" borderColor="paper.200">
+        <Box
+          key={post.id}
+          p={6}
+          border="2px solid"
+          borderColor="black"
+          bg="white"
+          transform="rotate(0.5deg)"
+          boxShadow="5px 5px 0 black"
+          _hover={{
+            transform: "rotate(0.5deg) translate(-3px, -3px)",
+            boxShadow: "8px 8px 0 black",
+            cursor: "pointer"
+          }}
+          transition="all 0.2s"
+          position="relative"
+          onClick={() => window.location.href = `/posts/${post.id}`}
+        >
           <HStack justify="space-between" align="start">
-            <VStack align="start" spacing={2}>
+            <VStack align="start" spacing={3} flex="1">
               <Heading size="md">{post.title}</Heading>
-              <HStack>
-                <Badge>{post.type}</Badge>
+              <HStack wrap="wrap">
                 <Badge
-                  colorScheme={
-                    post.status === "published"
-                      ? "green"
-                      : post.status === "draft"
-                      ? "gray"
-                      : "blue"
-                  }
+                  px={2}
+                  py={1}
+                  bg="paper.100"
+                  color="paper.800"
+                  fontWeight="bold"
+                  textTransform="uppercase"
+                  border="1px solid"
+                  borderColor="paper.300"
                 >
-                  {post.status}
+                  {post.type}
                 </Badge>
                 {post.category && (
-                  <Badge colorScheme="purple">{post.category.name}</Badge>
+                  <Badge
+                    px={2}
+                    py={1}
+                    bg="green.100"
+                    color="green.800"
+                    fontWeight="bold"
+                    textTransform="uppercase"
+                    border="1px solid"
+                    borderColor="green.300"
+                  >
+                    {post.category.name}
+                  </Badge>
                 )}
                 {post.tags && post.tags.map((tag) => (
-                  <Badge key={tag} colorScheme="teal">
+                  <Badge
+                    key={tag}
+                    px={2}
+                    py={1}
+                    bg="teal.100"
+                    color="teal.800"
+                    fontWeight="bold"
+                    textTransform="uppercase"
+                    border="1px solid"
+                    borderColor="teal.300"
+                  >
                     {tag}
                   </Badge>
                 ))}
               </HStack>
-              {post.status === "scheduled" && (
-                <Text fontSize="sm" color="paper.400">
-                  Scheduled for: {new Date(post.scheduled_for).toLocaleString()}
-                </Text>
-              )}
+              <Text noOfLines={3} color="paper.600">
+                {post.body}
+              </Text>
             </VStack>
-            <Menu>
+            
+            <Menu isLazy gutter={4}>
               <MenuButton
                 as={IconButton}
-                icon={<SettingsIcon />}
+                icon={<HamburgerIcon />}
                 variant="ghost"
+                aria-label="Post options"
+                onClick={(e) => e.stopPropagation()}
+                position="relative"
+                zIndex={2}
               />
-              <MenuList>
-                <MenuItem as={Link} to={`/posts/${post.slug}/edit`}>
-                  Edit
-                </MenuItem>
-                {post.status !== "published" && (
-                  <MenuItem onClick={() => onPublish(post.slug)}>
-                    Publish Now
+              <Portal>
+                <MenuList
+                  border="2px solid"
+                  borderColor="black"
+                  borderRadius="0"
+                  boxShadow="4px 4px 0 black"
+                  onClick={(e) => e.stopPropagation()}
+                  bg="white"
+                  zIndex={1400}
+                  position="relative"
+                >
+                  <MenuItem 
+                    as={Link}
+                    to={`/posts/${post.id}/edit`}
+                    state={{ from: location.pathname }}
+                    icon={<EditIcon />}
+                  >
+                    Edit
                   </MenuItem>
-                )}
-                <MenuItem color="red.500" onClick={() => onDelete(post.slug)}>
-                  Delete
-                </MenuItem>
-              </MenuList>
+                  {(post.status === "scheduled" || post.status === "draft") && (
+                    <MenuItem 
+                      onClick={() => onPublish(post.id)}
+                      icon={<CheckIcon />}
+                    >
+                      Publish Now
+                    </MenuItem>
+                  )}
+                  {post.status === "published" && (
+                    <MenuItem 
+                      onClick={() => onMoveToDrafts(post.id)}
+                      icon={<ViewOffIcon />}
+                    >
+                      Move to Drafts
+                    </MenuItem>
+                  )}
+                  <MenuItem 
+                    color="red.500" 
+                    onClick={() => onDelete(post.id)}
+                    icon={<DeleteIcon />}
+                  >
+                    Delete
+                  </MenuItem>
+                </MenuList>
+              </Portal>
             </Menu>
           </HStack>
         </Box>
@@ -321,6 +413,7 @@ PostsList.propTypes = {
   ).isRequired,
   onDelete: PropTypes.func.isRequired,
   onPublish: PropTypes.func.isRequired,
+  onMoveToDrafts: PropTypes.func.isRequired,
 };
 
 export default MyPosts;

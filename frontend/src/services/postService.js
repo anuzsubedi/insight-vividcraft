@@ -74,13 +74,13 @@ export const postService = {
         }
     },
 
-    async getPost(slug) {
+    async getPost(postId) {
         try {
-            const response = await api.get(ENDPOINTS.POSTS.GET(slug));
+            const response = await api.get(ENDPOINTS.POSTS.GET(postId));
             return response.data;
         } catch (error) {
             console.error('[GET POST] Error:', error);
             throw new Error(error.response?.data?.error || 'Failed to fetch post');
         }
-    },
+    }
 };
