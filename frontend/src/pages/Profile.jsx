@@ -102,7 +102,6 @@ function Profile() {
         setHasMore(false);
         if (page === 1) {
           setPosts([]);
-          setFilteredPosts([]);
         }
         return;
       }
@@ -113,9 +112,9 @@ function Profile() {
       setTotalPosts(pagination.total);
 
       // Update posts list
-      const newPosts = page === 1 ? response.posts : [...posts, ...response.posts];
-      setPosts(newPosts);
-      setFilteredPosts(newPosts);
+      setPosts(prevPosts => 
+        page === 1 ? response.posts : [...prevPosts, ...response.posts]
+      );
       
       // Set available categories on first load
       if (page === 1 && response.categories) {
@@ -136,46 +135,36 @@ function Profile() {
       setHasMore(false);
       if (page === 1) {
         setPosts([]);
-        setFilteredPosts([]);
       }
     } finally {
       setIsLoadingPosts(false);
     }
-  }, [username, page, selectedCategory, postType, sortOrder, posts, hasMore, isLoadingPosts, toast]);
+  }, [username, page, selectedCategory, postType, sortOrder, hasMore, isLoadingPosts, toast]);
 
   // Reset and reload posts when filters change
   useEffect(() => {
     if (!username) return;
     setPosts([]);
-    setFilteredPosts([]);
     setPage(1);
     setHasMore(true);
-    loadMorePosts();
-  }, [selectedCategory, postType, sortOrder, username, loadMorePosts]);
+  }, [username, selectedCategory, postType, sortOrder]);
+
+  // Load posts when page is reset or changed
+  useEffect(() => {
+    if (username && hasMore) {
+      loadMorePosts();
+    }
+  }, [username, page, loadMorePosts, hasMore]);
 
   // Load more posts when scrolling to bottom
   useEffect(() => {
-    if (inView && !isLoadingPosts && hasMore && page > 0) {
+    if (inView && !isLoadingPosts && hasMore && posts.length > 0) {
       setPage(prev => prev + 1);
     }
-  }, [inView, isLoadingPosts, hasMore, page]);
+  }, [inView, isLoadingPosts, hasMore, posts.length]);
 
-  // Effect to load more posts when page changes
+  // Update filtered posts when posts change
   useEffect(() => {
-    if (page > 1) {
-      loadMorePosts();
-    }
-  }, [page, loadMorePosts]);
-
-  // Effect to filter and sort posts
-  useEffect(() => {
-    // Don't filter if we don't have any posts
-    if (!posts.length) {
-      setFilteredPosts([]);
-      return;
-    }
-    
-    // Posts are already sorted from the backend
     setFilteredPosts(posts);
   }, [posts]);
 
