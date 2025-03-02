@@ -27,15 +27,23 @@ function ViewPost() {
     const loadPost = async () => {
       try {
         const response = await postService.getPost(id);
+        if (!response.post) {
+          navigate('/not-found', { replace: true });
+          return;
+        }
         setPost(response.post);
       } catch (error) {
-        toast({
-          title: "Error loading post",
-          description: error.message,
-          status: "error",
-          duration: 5000,
-        });
-        navigate("/");
+        if (error.response?.status === 404) {
+          navigate('/not-found', { replace: true });
+        } else {
+          toast({
+            title: "Error loading post",
+            description: error.response?.data?.error || error.message,
+            status: "error",
+            duration: 5000,
+          });
+          navigate("/");
+        }
       } finally {
         setIsLoading(false);
       }
@@ -56,14 +64,6 @@ function ViewPost() {
     return (
       <Container maxW="container.lg" py={8}>
         <Spinner size="xl" />
-      </Container>
-    );
-  }
-
-  if (!post) {
-    return (
-      <Container maxW="container.lg" py={8}>
-        <Text>Post not found</Text>
       </Container>
     );
   }
@@ -166,4 +166,4 @@ function ViewPost() {
   );
 }
 
-export default ViewPost; 
+export default ViewPost;

@@ -51,3 +51,47 @@ export const sendVerificationEmail = async (email, code) => {
         throw error;
     }
 };
+
+export const sendEmailChangeNotification = async (oldEmail, newEmail) => {
+    try {
+        const mailOptions = {
+            from: '"Insight Team" <insight@anuz.dev>',
+            to: oldEmail,
+            subject: "Email Address Changed - Insight",
+            html: `
+                <h1>Email Address Changed</h1>
+                <p>The email address associated with your Insight account has been changed to: ${newEmail}</p>
+                <p>If you did not make this change, please contact support immediately.</p>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Email change notification sent:", info.messageId);
+        return info;
+    } catch (error) {
+        console.error("Email sending error:", error);
+        throw error;
+    }
+};
+
+export const sendPasswordChangeNotification = async (email) => {
+    try {
+        const mailOptions = {
+            from: '"Insight Team" <insight@anuz.dev>',
+            to: email,
+            subject: "Password Changed - Insight",
+            html: `
+                <h1>Password Changed</h1>
+                <p>The password for your Insight account has been changed.</p>
+                <p>If you did not make this change, please contact support immediately.</p>
+            `,
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log("Password change notification sent:", info.messageId);
+        return info;
+    } catch (error) {
+        console.error("Email sending error:", error);
+        throw error;
+    }
+};

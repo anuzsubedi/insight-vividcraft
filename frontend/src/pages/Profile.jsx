@@ -24,6 +24,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Portal,
 } from "@chakra-ui/react";
 import { 
   ChevronDownIcon, 
@@ -32,7 +33,8 @@ import {
   NotAllowedIcon, 
   DeleteIcon, 
   ViewOffIcon,
-  HamburgerIcon 
+  HamburgerIcon,
+  CheckIcon 
 } from "@chakra-ui/icons";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { profileService } from "../services/profileService";
@@ -59,6 +61,7 @@ function Profile() {
   const [posts, setPosts] = useState([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [editMode, setEditMode] = useState(null); // null, 'bio', 'name', 'username'
+  const [showEditButtons, setShowEditButtons] = useState(false);
 
   // Redirect to /user/:username if accessed via /profile
   useEffect(() => {
@@ -78,25 +81,28 @@ function Profile() {
       setEditedUsername(response.profile.username || "");
       setIsOwnProfile(user?.username === username);
       
-      // Set follow and mute status if available in the response
       if (response.profile.isFollowing !== undefined) {
         setIsFollowing(response.profile.isFollowing);
       }
       if (response.profile.isMuted !== undefined) {
         setIsMuted(response.profile.isMuted);
       }
-      
-      setIsLoading(false);
     } catch (error) {
+      if (error.message === "User not found" || error.response?.status === 404) {
+        navigate('/user-not-found', { replace: true });
+        return;
+      }
+      // Only show toast for non-404 errors
       toast({
         title: "Error loading profile",
         description: error.message,
         status: "error",
         duration: 3000,
       });
+    } finally {
       setIsLoading(false);
     }
-  }, [username, user, toast]);
+  }, [username, user, navigate, toast]);
 
   const fetchPosts = useCallback(async () => {
     try {
@@ -131,6 +137,7 @@ function Profile() {
 
   const handleUpdateProfile = async () => {
     try {
+      setIsLoading(true);
       const updateData = {};
       
       if (editMode === 'bio') {
@@ -141,29 +148,45 @@ function Profile() {
         updateData.username = editedUsername;
       }
       
-      await profileService.updateProfile(updateData);
+      const response = await profileService.updateProfile(updateData);
       
-      // Update local state
-      setProfile((prev) => ({ ...prev, ...updateData }));
+      // Update local state with the response data
+      setProfile(prev => ({ 
+        ...prev,
+        bio: response.profile.bio,
+        displayName: response.profile.displayName,
+        username: response.profile.username
+      }));
       
-      // If username was changed, navigate to the new profile URL
-      if (editMode === 'username' && editedUsername !== username) {
-        navigate(`/user/${editedUsername}`);
+      // Only navigate if the update was successful and username was changed
+      if (editMode === 'username' && response.profile.username !== username) {
+        toast({
+          title: "Username Updated!",
+          description: "Redirecting to new profile...",
+          status: "success",
+          duration: 3000,
+        });
+        // Add a small delay before navigation to allow backend changes to propagate
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        navigate(`/user/${response.profile.username}`, { replace: true });
+      } else {
+        toast({
+          title: "Profile Updated!",
+          status: "success",
+          duration: 3000,
+        });
       }
       
       setEditMode(null);
-      toast({
-        title: "Profile Updated!",
-        status: "success",
-        duration: 3000,
-      });
     } catch (error) {
       toast({
         title: "Error updating profile",
-        description: error.message,
+        description: error.response?.data?.error || error.message,
         status: "error",
         duration: 3000,
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -339,7 +362,25 @@ function Profile() {
           border="2px solid"
           borderColor="black"
           boxShadow="6px 6px 0 black"
+          position="relative"
         >
+          {isOwnProfile && (
+            <IconButton
+              icon={showEditButtons ? <CheckIcon /> : <EditIcon />} // Change icon based on showEditButtons state
+              position="absolute"
+              top={4}
+              right={4}
+              onClick={() => setShowEditButtons(!showEditButtons)}
+              aria-label="Toggle edit mode"
+              variant="solid"
+              borderWidth="2px"
+              borderColor="black"
+              boxShadow="3px 3px 0 black"
+              _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
+              _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
+            />
+          )}
+
           {/* Left Side - Avatar */}
           <Box position="relative" minW={{ base: "150px", md: "200px" }}>
             {profile.avatarName ? (
@@ -367,7 +408,7 @@ function Profile() {
                 boxShadow="5px 5px 0 black"
               />
             )}
-            {isOwnProfile && (
+            {isOwnProfile && showEditButtons && (
               <IconButton
                 icon={<EditIcon />}
                 position="absolute"
@@ -424,7 +465,7 @@ function Profile() {
             ) : (
               <Flex width="100%" align="center">
                 <Heading size="2xl" mb={1}>{profile.displayName}</Heading>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
@@ -477,7 +518,7 @@ function Profile() {
                 <Text color="paper.400" fontSize="xl" fontWeight="bold">
                   @{profile.username}
                 </Text>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
@@ -533,7 +574,7 @@ function Profile() {
                 <Text color="paper.600" fontSize="lg" maxW="600px">
                   {profile.bio || "No bio yet..."}
                 </Text>
-                {isOwnProfile && (
+                {isOwnProfile && showEditButtons && (
                   <IconButton
                     icon={<EditIcon />}
                     size="sm"
@@ -692,43 +733,50 @@ function Profile() {
                     </VStack>
                     
                     {isOwnProfile && (
-                      <Menu isLazy>
+                      <Menu isLazy gutter={4}>
                         <MenuButton
                           as={IconButton}
                           icon={<HamburgerIcon />}
                           variant="ghost"
                           aria-label="Post options"
                           onClick={(e) => e.stopPropagation()}
+                          position="relative"
+                          zIndex={2}
                         />
-                        <MenuList
-                          border="2px solid"
-                          borderColor="black"
-                          borderRadius="0"
-                          boxShadow="4px 4px 0 black"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MenuItem 
-                            as={Link}
-                            to={`/posts/${post.id}/edit`}
-                            state={{ from: location.pathname }}
-                            icon={<EditIcon />}
+                        <Portal>
+                          <MenuList
+                            border="2px solid"
+                            borderColor="black"
+                            borderRadius="0"
+                            boxShadow="4px 4px 0 black"
+                            onClick={(e) => e.stopPropagation()}
+                            bg="white"
+                            zIndex={1400}
+                            position="relative"
                           >
-                            Edit
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<ViewOffIcon />} 
-                            onClick={() => handleUnpublishPost(post.id)}
-                          >
-                            Move to Drafts
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<DeleteIcon />} 
-                            color="red.500"
-                            onClick={() => handleDeletePost(post.id)}
-                          >
-                            Delete Post
-                          </MenuItem>
-                        </MenuList>
+                            <MenuItem 
+                              as={Link}
+                              to={`/posts/${post.id}/edit`}
+                              state={{ from: location.pathname }}
+                              icon={<EditIcon />}
+                            >
+                              Edit
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<ViewOffIcon />} 
+                              onClick={() => handleUnpublishPost(post.id)}
+                            >
+                              Move to Drafts
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<DeleteIcon />} 
+                              color="red.500"
+                              onClick={() => handleDeletePost(post.id)}
+                            >
+                              Delete Post
+                            </MenuItem>
+                          </MenuList>
+                        </Portal>
                       </Menu>
                     )}
                   </Flex>
