@@ -54,11 +54,20 @@ function Settings() {
   const handleProfileUpdate = async () => {
     try {
       setIsLoading(true);
-      await profileService.updateProfile({
+      const response = await profileService.updateProfile({
         displayName: formData.displayName,
         username: formData.username,
         bio: formData.bio,
       });
+      
+      // Update the form data with the response
+      setFormData(prev => ({
+        ...prev,
+        displayName: response.profile.displayName,
+        username: response.profile.username,
+        bio: response.profile.bio,
+      }));
+
       toast({
         title: "Profile Updated!",
         status: "success",
@@ -67,7 +76,7 @@ function Settings() {
     } catch (error) {
       toast({
         title: "Error updating profile",
-        description: error.message,
+        description: error.response?.data?.error || error.message,
         status: "error",
         duration: 3000,
       });

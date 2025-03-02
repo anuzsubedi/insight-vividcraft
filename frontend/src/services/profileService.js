@@ -1,5 +1,6 @@
 import api from '../api/axios';
 import { ENDPOINTS } from '../api/endpoints';
+import useAuthState from '../hooks/useAuthState';
 
 export const profileService = {
     async getProfile() {
@@ -22,6 +23,19 @@ export const profileService = {
             };
 
             const response = await api.put(ENDPOINTS.PROFILE.UPDATE, updateData);
+            
+            // Update auth state with new user data
+            const currentUser = useAuthState.getState().user;
+            if (currentUser) {
+                useAuthState.getState().setUser({
+                    ...currentUser,
+                    username: data.username || currentUser.username,
+                    displayName: data.displayName || currentUser.displayName,
+                    bio: data.bio || currentUser.bio,
+                    avatarName: data.avatarName || currentUser.avatarName
+                });
+            }
+            
             return response.data;
         } catch (error) {
             console.error('[UPDATE PROFILE] Error:', error);

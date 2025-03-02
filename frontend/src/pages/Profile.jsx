@@ -144,14 +144,19 @@ function Profile() {
         updateData.username = editedUsername;
       }
       
-      await profileService.updateProfile(updateData);
+      const response = await profileService.updateProfile(updateData);
       
-      // Update local state
-      setProfile((prev) => ({ ...prev, ...updateData }));
+      // Update local state with the response data
+      setProfile(prev => ({ 
+        ...prev,
+        bio: response.profile.bio,
+        displayName: response.profile.displayName,
+        username: response.profile.username
+      }));
       
-      // If username was changed, navigate to the new profile URL
-      if (editMode === 'username' && editedUsername !== username) {
-        navigate(`/user/${editedUsername}`);
+      // If username was changed and successful, navigate to the new profile URL
+      if (editMode === 'username' && response.profile.username !== username) {
+        navigate(`/user/${response.profile.username}`);
       }
       
       setEditMode(null);
@@ -163,7 +168,7 @@ function Profile() {
     } catch (error) {
       toast({
         title: "Error updating profile",
-        description: error.message,
+        description: error.response?.data?.error || error.message,
         status: "error",
         duration: 3000,
       });
