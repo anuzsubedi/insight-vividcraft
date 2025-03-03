@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import {
   Button,
   Heading,
@@ -14,6 +15,7 @@ import {
   Image,
   Avatar,
   useToast,
+  useColorModeValue,
 } from "@chakra-ui/react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDownIcon, AddIcon } from "@chakra-ui/icons";
@@ -21,10 +23,16 @@ import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
 
+const MotionBox = motion(Box);
+const MotionContainer = motion(Container);
+
 function App() {
   const { user, logout } = useAuthState();
   const navigate = useNavigate();
   const toast = useToast();
+  
+  const bgColor = useColorModeValue("gray.50", "gray.900");
+  const headerBg = useColorModeValue("rgba(255, 255, 255, 0.8)", "rgba(26, 32, 44, 0.8)");
 
   const handleLogout = () => {
     logout();
@@ -38,70 +46,103 @@ function App() {
 
   if (!user) {
     return (
-      <VStack spacing={8} justify="center" minH="100vh" bg="paper.50">
-        <Logo size="6xl" />
-        <Text fontSize="lg" color="paper.400">
-          Please sign in to continue
-        </Text>
-        <Button as={Link} to="/login" variant="solid">
-          Sign In to Continue
-        </Button>
-      </VStack>
+      <MotionBox
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        minH="100vh"
+        bg={bgColor}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+      >
+        <MotionBox
+          initial={{ y: 20 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          textAlign="center"
+        >
+          <Logo size="6xl" />
+          <Text fontSize="xl" mt={6} mb={8} color="gray.500">
+            Join the community of creative minds
+          </Text>
+          <Button
+            as={Link}
+            to="/login"
+            size="lg"
+            colorScheme="blue"
+            px={12}
+            rounded="full"
+            shadow="lg"
+            _hover={{ transform: "translateY(-2px)", shadow: "xl" }}
+            transition="all 0.2s"
+          >
+            Get Started
+          </Button>
+        </MotionBox>
+      </MotionBox>
     );
   }
 
   return (
-    <Box minH="100vh" bg="paper.50">
+    <MotionBox
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      minH="100vh"
+      bg={bgColor}
+    >
       {/* Header */}
       <Box
         py={4}
-        bg="white"
-        borderBottom="2px"
-        borderColor="paper.200"
+        bg={headerBg}
+        backdropFilter="blur(10px)"
+        borderBottom="1px"
+        borderColor="gray.200"
         position="sticky"
         top={0}
         zIndex={10}
       >
-        <Container maxW="container.xl">
+        <Container maxW="5xl">
           <HStack justify="space-between" align="center">
-            <Logo size="2xl" />
+            <MotionBox
+              whileHover={{ scale: 1.05 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Logo size="2xl" />
+            </MotionBox>
 
-            <HStack spacing={4}>
-              <Button
-                as={Link}
-                to="/posts/new"
-                variant="solid"
-                leftIcon={<AddIcon />}
-                borderWidth="2px"
-                borderColor="black"
-                boxShadow="3px 3px 0 black"
-                _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
-                _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
-              >
-                Create Post
-              </Button>
+            <HStack spacing={6}>
+              <MotionBox whileHover={{ y: -2 }}>
+                <Button
+                  as={Link}
+                  to="/posts/new"
+                  colorScheme="blue"
+                  leftIcon={<AddIcon />}
+                  rounded="full"
+                  px={6}
+                  shadow="md"
+                >
+                  New Post
+                </Button>
+              </MotionBox>
 
               <Menu>
                 <MenuButton
                   as={Button}
-                  variant="outline"
+                  variant="ghost"
                   rightIcon={<ChevronDownIcon />}
-                  borderWidth="2px"
-                  borderColor="black"
-                  boxShadow="3px 3px 0 black"
-                  _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
-                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
                 >
                   <HStack spacing={3}>
                     {user.avatarName ? (
-                      <Image
+                      <MotionBox
+                        as="img"
+                        whileHover={{ scale: 1.1 }}
                         src={`/avatars/${user.avatarName}`}
-                        alt="Profile Avatar"
-                        boxSize="32px"
-                        borderRadius="full"
+                        alt="Profile"
+                        w="32px"
+                        h="32px"
+                        rounded="full"
                         border="2px solid"
-                        borderColor="paper.400"
-                        bg="white"
+                        borderColor="blue.500"
                       />
                     ) : (
                       <Avatar
@@ -111,15 +152,14 @@ function App() {
                         color="white"
                       />
                     )}
-                    <Text>{user.displayName}</Text>
+                    <Text>@{user.username}</Text>
                   </HStack>
                 </MenuButton>
                 <MenuList
-                  border="2px solid"
-                  borderColor="black"
-                  borderRadius="0"
-                  boxShadow="4px 4px 0 black"
-                  p={2}
+                  border="1px solid"
+                  borderColor="gray.200"
+                  shadow="lg"
+                  rounded="md"
                 >
                   <MenuItem
                     as={Link}
@@ -162,50 +202,55 @@ function App() {
       </Box>
 
       {/* Main Content */}
-      <Container maxW="container.xl" py={8}>
-        <VStack spacing={8} align="stretch">
-          {/* Welcome Section */}
-          <Box
-            bg="white"
-            p={8}
-            border="2px solid"
-            borderColor="black"
-            transform="translate(-4px, -4px)"
-            boxShadow="6px 6px 0 black"
-            position="relative"
-            _before={{
-              content: '""',
-              position: "absolute",
-              top: "15px",
-              left: "15px",
-              right: "-15px",
-              bottom: "-15px",
-              border: "2px solid black",
-              zIndex: -1,
-            }}
-          >
-            <VStack spacing={4} align="start">
-              <Heading size="xl">Welcome back, {user.displayName}!</Heading>
-              <Text fontSize="lg" color="paper.400">
-                Start exploring and sharing your insights with the community.
-              </Text>
-            </VStack>
-          </Box>
+      <MotionContainer
+        maxW="5xl"
+        py={8}
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+      >
+        {/* Welcome Section */}
+        <Box
+          bg="white"
+          p={8}
+          border="2px solid"
+          borderColor="black"
+          transform="translate(-4px, -4px)"
+          boxShadow="6px 6px 0 black"
+          position="relative"
+          _before={{
+            content: '""',
+            position: "absolute",
+            top: "15px",
+            left: "15px",
+            right: "-15px",
+            bottom: "-15px",
+            border: "2px solid black",
+            zIndex: -1,
+          }}
+        >
+          <VStack spacing={4} align="start">
+            <Heading size="xl">Welcome back, {user.displayName}!</Heading>
+            <Text fontSize="lg" color="paper.400">
+              Start exploring and sharing your insights with the community.
+            </Text>
+          </VStack>
+        </Box>
 
-          {/* Feed Section */}
-          <Box
-            bg="white"
-            p={8}
-            border="2px solid"
-            borderColor="black"
-            boxShadow="6px 6px 0 black"
-            transform="translate(-4px, -4px)"
-          >
-            <Feed />
-          </Box>
-        </VStack>
-      </Container>
-    </Box>
+        {/* Feed Section */}
+        <MotionBox
+          bg="white"
+          rounded="xl"
+          shadow="sm"
+          overflow="hidden"
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Feed />
+        </MotionBox>
+      </MotionContainer>
+    </MotionBox>
   );
 }
 

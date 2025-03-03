@@ -9,6 +9,8 @@
     "start": "concurrently \"npm start --prefix backend\" \"npm start --prefix frontend\""
   },
   "dependencies": {
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.1.0",
+    "framer-motion": "^12.4.7",
+    "react-icons": "^5.5.0"
   }
 }

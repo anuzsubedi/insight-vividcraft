@@ -9,10 +9,9 @@ function Logo({ size = "xl", ...props }) {
       fontWeight="bold"
       letterSpacing="-0.02em"
       color="accent.100"
-      textTransform="uppercase"
       {...props}
     >
-      INSIGHT
+      insight.
     </Text>
   );
 }
