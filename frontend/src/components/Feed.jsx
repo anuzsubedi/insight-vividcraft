@@ -14,12 +14,21 @@ import {
     MenuList,
     MenuItemOption,
     MenuOptionGroup,
-    useToast
+    useToast,
+    Avatar,
+    Flex
 } from '@chakra-ui/react';
 import { ChevronDownIcon } from '@chakra-ui/icons';
 import { feedService } from '../services/feedService';
 import { useNavigate } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
+import { formatDistanceToNow } from 'date-fns';
+import { Link } from 'react-router-dom';
+
+// Helper function to format date
+const formatPostDate = (date) => {
+    return formatDistanceToNow(new Date(date), { addSuffix: true });
+};
 
 function Feed() {
     const [feedType, setFeedType] = useState('following');
@@ -185,50 +194,79 @@ function Feed() {
                             cursor: "pointer"
                         }}
                         transition="all 0.2s"
-                        onClick={() => navigate(`/posts/${post.id}`)}
                     >
-                        <VStack align="start" spacing={3}>
-                            <Text
-                                fontSize="2xl"
-                                fontWeight="bold"
-                                color="paper.500"
-                            >
-                                {post.title}
-                            </Text>
-                            <HStack wrap="wrap" spacing={2}>
-                                <Badge
-                                    px={2}
-                                    py={1}
-                                    bg="paper.100"
-                                    color="paper.800"
-                                    fontWeight="bold"
-                                    textTransform="uppercase"
-                                    border="1px solid"
-                                    borderColor="paper.300"
-                                >
-                                    {post.type}
-                                </Badge>
-                                {post.category && (
-                                    <Badge
-                                        px={2}
-                                        py={1}
-                                        bg="green.100"
-                                        color="green.800"
-                                        fontWeight="bold"
-                                        textTransform="uppercase"
-                                        border="1px solid"
-                                        borderColor="green.300"
+                        <VStack align="stretch" spacing={4}>
+                            {/* Author Info */}
+                            <HStack spacing={3} onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/user/${post.author.username}`);
+                            }}>
+                                <Avatar 
+                                    size="md" 
+                                    name={post.author.display_name}
+                                    src={`/avatars/${post.author.avatar_name}`}
+                                    cursor="pointer"
+                                />
+                                <VStack align="start" spacing={0}>
+                                    <Text 
+                                        fontWeight="bold" 
+                                        color="paper.800"
+                                        _hover={{ textDecoration: "underline" }}
                                     >
-                                        {post.category.name}
-                                    </Badge>
-                                )}
+                                        {post.author.display_name}
+                                    </Text>
+                                    <Text 
+                                        fontSize="sm" 
+                                        color="paper.500"
+                                    >
+                                        @{post.author.username}
+                                    </Text>
+                                </VStack>
+                                <Text 
+                                    fontSize="sm" 
+                                    color="paper.400" 
+                                    ml="auto"
+                                >
+                                    {formatPostDate(post.published_at)}
+                                </Text>
                             </HStack>
-                            <Text noOfLines={3} color="paper.600">
-                                {post.body}
-                            </Text>
-                            <Text fontSize="sm" color="paper.400">
-                                By {post.author.display_name} • {new Date(post.published_at).toLocaleDateString()}
-                            </Text>
+
+                            {/* Post Content */}
+                            <Box onClick={() => navigate(`/posts/${post.id}`)}>
+                                <Text
+                                    fontSize="xl"
+                                    fontWeight="bold"
+                                    color="paper.800"
+                                    mb={2}
+                                >
+                                    {post.title}
+                                </Text>
+                                <Text 
+                                    noOfLines={3} 
+                                    color="paper.600"
+                                    mb={3}
+                                >
+                                    {post.body}
+                                </Text>
+
+                                {/* Categories and Tags */}
+                                <HStack spacing={2} wrap="wrap">
+                                    {post.category && (
+                                        <Badge
+                                            px={2}
+                                            py={1}
+                                            bg="green.100"
+                                            color="green.800"
+                                            fontWeight="bold"
+                                            textTransform="uppercase"
+                                            border="1px solid"
+                                            borderColor="green.300"
+                                        >
+                                            {post.category.name}
+                                        </Badge>
+                                    )}
+                                </HStack>
+                            </Box>
                         </VStack>
                     </Box>
                 ))}
