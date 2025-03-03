@@ -64,3 +64,5 @@ export const generateToken = (user) => {
         { expiresIn: '24h' }
     );
 };
+
+export default verifyToken;

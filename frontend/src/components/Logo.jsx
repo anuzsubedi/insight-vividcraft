@@ -1,15 +1,18 @@
 import { Text } from "@chakra-ui/react";
 import PropTypes from "prop-types";
 
-function Logo({ size = "xl" }) {
+function Logo({ size = "xl", ...props }) {
   return (
     <Text
-      fontFamily="monospace"
+      fontFamily="heading"
       fontSize={size}
       fontWeight="bold"
-      letterSpacing="tight"
+      letterSpacing="-0.02em"
+      color="accent.100"
+      textTransform="uppercase"
+      {...props}
     >
-      insight.
+      INSIGHT
     </Text>
   );
 }

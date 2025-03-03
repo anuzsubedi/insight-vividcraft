@@ -6,20 +6,20 @@ import {
   HStack,
   Box,
   Container,
-  Avatar,
   Menu,
   MenuButton,
   MenuList,
   MenuItem,
   Divider,
-  useToast,
   Image,
+  Avatar,
+  useToast,
 } from "@chakra-ui/react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDownIcon } from "@chakra-ui/icons";
-import { AddIcon } from "@chakra-ui/icons";
-import HealthCheck from "./components/HealthCheck";
+import { ChevronDownIcon, AddIcon } from "@chakra-ui/icons";
 import useAuthState from "./hooks/useAuthState";
+import Logo from "./components/Logo";
+import Feed from "./components/Feed";
 
 function App() {
   const { user, logout } = useAuthState();
@@ -38,8 +38,8 @@ function App() {
 
   if (!user) {
     return (
-      <VStack spacing={8} justify="center" minH="100vh">
-        <Heading size="2xl">Welcome to Insight</Heading>
+      <VStack spacing={8} justify="center" minH="100vh" bg="paper.50">
+        <Logo size="6xl" />
         <Text fontSize="lg" color="paper.400">
           Please sign in to continue
         </Text>
@@ -64,9 +64,7 @@ function App() {
       >
         <Container maxW="container.xl">
           <HStack justify="space-between" align="center">
-            <Heading size="lg" color="accent.100">
-              INSIGHT
-            </Heading>
+            <Logo size="2xl" />
 
             <HStack spacing={4}>
               <Button
@@ -74,6 +72,11 @@ function App() {
                 to="/posts/new"
                 variant="solid"
                 leftIcon={<AddIcon />}
+                borderWidth="2px"
+                borderColor="black"
+                boxShadow="3px 3px 0 black"
+                _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
+                _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
               >
                 Create Post
               </Button>
@@ -83,6 +86,11 @@ function App() {
                   as={Button}
                   variant="outline"
                   rightIcon={<ChevronDownIcon />}
+                  borderWidth="2px"
+                  borderColor="black"
+                  boxShadow="3px 3px 0 black"
+                  _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
+                  _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
                 >
                   <HStack spacing={3}>
                     {user.avatarName ? (
@@ -108,9 +116,9 @@ function App() {
                 </MenuButton>
                 <MenuList
                   border="2px solid"
-                  borderColor="paper.400"
+                  borderColor="black"
                   borderRadius="0"
-                  boxShadow="6px 6px 0 black"
+                  boxShadow="4px 4px 0 black"
                   p={2}
                 >
                   <MenuItem
@@ -135,7 +143,7 @@ function App() {
                     borderRadius="0"
                     _hover={{ bg: "paper.100" }}
                   >
-                   Settings
+                    Settings
                   </MenuItem>
                   <Divider my={2} borderColor="paper.200" />
                   <MenuItem
@@ -161,7 +169,7 @@ function App() {
             bg="white"
             p={8}
             border="2px solid"
-            borderColor="paper.400"
+            borderColor="black"
             transform="translate(-4px, -4px)"
             boxShadow="6px 6px 0 black"
             position="relative"
@@ -184,22 +192,16 @@ function App() {
             </VStack>
           </Box>
 
-          {/* Feed Section - Placeholder */}
+          {/* Feed Section */}
           <Box
             bg="white"
             p={8}
             border="2px solid"
-            borderColor="paper.400"
-            transform="translate(-4px, -4px)"
+            borderColor="black"
             boxShadow="6px 6px 0 black"
+            transform="translate(-4px, -4px)"
           >
-            <VStack spacing={4} align="stretch">
-              <Heading size="lg">Your Feed</Heading>
-              <Text color="paper.400">
-                This is where your personalized feed will appear.
-              </Text>
-              <HealthCheck />
-            </VStack>
+            <Feed />
           </Box>
         </VStack>
       </Container>
