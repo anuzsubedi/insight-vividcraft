@@ -62,8 +62,8 @@ function Feed() {
                 case 'following':
                     response = await feedService.getFollowingFeed(params);
                     break;
-                case 'extended':
-                    response = await feedService.getExtendedFeed(params);
+                case 'network': // Changed from 'extended'
+                    response = await feedService.getNetworkFeed(params); // Changed function name
                     break;
                 case 'explore':
                     if (selectedCategories.length > 0) {
@@ -152,7 +152,7 @@ function Feed() {
                     }}
                 >
                     <option value="following">Following</option>
-                    <option value="extended">Network</option>
+                    <option value="network">Network</option> {/* Changed from "extended" */}
                     <option value="explore">Explore</option>
                 </ChakraSelect>
 

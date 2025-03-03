@@ -42,7 +42,7 @@ export const ENDPOINTS = {
     },
     FEED: {
         FOLLOWING: '/api/feed/following',
-        EXTENDED: '/api/feed/extended',
+        NETWORK: '/api/feed/network', // Changed from EXTENDED
         EXPLORE: '/api/feed/explore',
     }
 };

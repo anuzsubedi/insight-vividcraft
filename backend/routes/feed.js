@@ -75,60 +75,77 @@ router.get('/following', authMiddleware, async (req, res) => {
     }
 });
 
-// Get extended network feed (posts from users followed by users you follow)
-router.get('/extended', authMiddleware, async (req, res) => {
+// Get network feed (posts from users followed by users you follow)
+router.get('/network', authMiddleware, async (req, res) => {
     try {
         const { user } = req;
         const { page = 1, limit = 10 } = req.query;
         const offset = (page - 1) * limit;
 
-        // Get posts from extended network, excluding muted users and already followed users
-        const { data: extendedPosts, error } = await supabase
+        // Get users you follow
+        const { data: following, error: followingError } = await supabase
+            .from('follows')
+            .select('following_id')
+            .eq('follower_id', user.userId);
+
+        if (followingError) throw followingError;
+
+        if (!following || following.length === 0) {
+            return res.json({
+                posts: [],
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    hasMore: false
+                }
+            });
+        }
+
+        const followingIds = following.map(f => f.following_id);
+
+        // Get network users (users followed by users you follow)
+        const { data: networkUsers, error: networkError } = await supabase
+            .from('follows')
+            .select('following_id')
+            .filter('follower_id', 'in', `(${followingIds.join(',')})`)
+            .filter('following_id', 'neq', user.userId);
+
+        if (networkError) throw networkError;
+
+        // Combine both following and network users (removing duplicates)
+        const networkUserIds = [
+            ...followingIds,
+            ...networkUsers.map(u => u.following_id)
+        ];
+        const uniqueUserIds = [...new Set(networkUserIds)];
+
+        // Get posts from both following and network users
+        const { data: networkPosts, error: postsError } = await supabase
             .from('posts')
             .select(`
                 *,
-                author:user_id (username, display_name, avatar_name),
-                category:category_id (id, name)
+                author:users!posts_author_id_fkey (username, display_name, avatar_name),
+                category:categories!posts_category_id_fkey (id, name)
             `)
             .eq('status', 'published')
-            .in('user_id',
-                supabase
-                    .from('follows as f1')
-                    .select('following_id')
-                    .eq('follower_id', 
-                        supabase
-                            .from('follows as f2')
-                            .select('following_id')
-                            .eq('follower_id', user.id)
-                    )
-                    .not('following_id', 'in',
-                        supabase
-                            .from('follows')
-                            .select('following_id')
-                            .eq('follower_id', user.id)
-                    )
-                    .not('following_id', 'in',
-                        supabase
-                            .from('mutes')
-                            .select('muted_id')
-                            .eq('muter_id', user.id)
-                    )
-            )
+            .in('author_id', uniqueUserIds)
+            .not('author_id', 'eq', user.userId) // Exclude your own posts
             .order('published_at', { ascending: false })
             .range(offset, offset + limit - 1);
 
-        if (error) throw error;
+        if (postsError) throw postsError;
 
         res.json({
-            posts: extendedPosts,
+            posts: networkPosts || [],
             pagination: {
                 page: parseInt(page),
                 limit: parseInt(limit),
-                hasMore: extendedPosts.length === parseInt(limit)
+                hasMore: networkPosts?.length === parseInt(limit)
             }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Feed error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
     }
 });
 
