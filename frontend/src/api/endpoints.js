@@ -39,5 +39,10 @@ export const ENDPOINTS = {
         CREATE: '/api/categories',
         UPDATE: (id) => `/api/categories/${id}`,
         DELETE: (id) => `/api/categories/${id}`
+    },
+    FEED: {
+        FOLLOWING: '/api/feed/following',
+        NETWORK: '/api/feed/network', // Changed from EXTENDED
+        EXPLORE: '/api/feed/explore',
     }
 };
