@@ -3,7 +3,7 @@ import {
     VStack,
     Box,
     Text,
-    Select,
+    Select as ChakraSelect,
     Spinner,
     Center,
     Badge,
@@ -130,47 +130,49 @@ function Feed() {
     };
 
     return (
-        <VStack spacing={0} align="stretch" w="100%">
+        <VStack spacing={6} align="stretch">
+            {/* Feed Type Selector */}
             <HStack 
                 spacing={4} 
-                p={4} 
-                borderBottom="1px" 
-                borderColor="gray.200"
+                p={6}
                 bg="white"
-                position="sticky"
-                top={0}
-                zIndex={1}
+                border="2px solid black"
+                transform="rotate(1deg)"
+                boxShadow="6px 6px 0 black"
             >
-                <Select
+                <ChakraSelect
                     value={feedType}
                     onChange={(e) => handleFeedTypeChange(e.target.value)}
-                    maxW="200px"
-                    rounded="full"
-                    size="sm"
-                    border="1px solid"
-                    borderColor="gray.300"
-                    _hover={{ borderColor: "blue.500" }}
+                    w="200px"
+                    border="2px solid black"
+                    borderRadius="0"
+                    _hover={{
+                        transform: "translate(-2px, -2px)",
+                        boxShadow: "4px 4px 0 0 #000",
+                    }}
                 >
                     <option value="following">Following</option>
                     <option value="extended">Network</option>
                     <option value="explore">Explore</option>
-                </Select>
+                </ChakraSelect>
 
                 {feedType === 'explore' && (
                     <Menu closeOnSelect={false}>
                         <MenuButton
                             as={Button}
-                            rightIcon={<ChevronDownIcon />}
-                            borderWidth="2px"
-                            borderColor="black"
-                            boxShadow="3px 3px 0 black"
-                            _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
+                            bg="white"
+                            border="2px solid black"
+                            borderRadius="0"
+                            _hover={{
+                                transform: "translate(-2px, -2px)",
+                                boxShadow: "4px 4px 0 0 #000",
+                            }}
                         >
                             Categories
                         </MenuButton>
                         <MenuList
-                            borderWidth="2px"
-                            borderColor="black"
+                            border="2px solid black"
+                            borderRadius="0"
                             boxShadow="4px 4px 0 black"
                         >
                             <MenuOptionGroup
@@ -193,117 +195,75 @@ function Feed() {
                 )}
             </HStack>
 
-            <VStack spacing={0} align="stretch" divider={<Divider />}>
+            {/* Posts */}
+            <VStack spacing={6} align="stretch">
                 {posts.map((post, index) => (
                     <MotionBox
                         key={post.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.1 }}
-                        px={6}
-                        py={4}
-                        _hover={{ bg: 'gray.50' }}
-                        cursor="pointer"
-                        onClick={() => navigate(`/posts/${post.id}`)}
+                        bg="white"
+                        border="2px solid black"
+                        transform={index % 2 === 0 ? "rotate(1deg)" : "rotate(-1deg)"}
+                        boxShadow="6px 6px 0 black"
+                        _hover={{
+                            transform: "translate(-2px, -2px)",
+                            boxShadow: "8px 8px 0 black",
+                        }}
                     >
-                        <HStack spacing={3} mb={2}>
-                            <MotionBox
-                                whileHover={{ scale: 1.1 }}
-                                as="img"
-                                src={`/avatars/${post.author.avatar_name}`}
-                                w="40px"
-                                h="40px"
-                                rounded="full"
-                                border="2px solid"
-                                borderColor="gray.200"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/user/${post.author.username}`);
-                                }}
-                            />
-                            <VStack align="start" spacing={0}>
-                                <Text 
-                                    fontSize="sm"
-                                    fontWeight="medium"
-                                    color="gray.700"
-                                    _hover={{ color: "blue.500" }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/user/${post.author.username}`);
-                                    }}
-                                >
-                                    @{post.author.username}
-                                </Text>
-                                <Text fontSize="xs" color="gray.500">
-                                    {formatPostDate(post.published_at)}
-                                </Text>
-                            </VStack>
-                        </HStack>
-
-                        <Box pl={12}>
-                            <Text
-                                fontSize="lg"
-                                fontWeight="semibold"
-                                mb={2}
-                                color="gray.800"
-                            >
-                                {post.title}
-                            </Text>
-                            <Text 
-                                fontSize="sm"
-                                color="gray.600"
-                                mb={3}
-                                noOfLines={2}
-                            >
-                                {post.body}
-                            </Text>
-
-                            <MotionHStack 
-                                spacing={8} 
-                                color="gray.400"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ delay: 0.2 }}
-                            >
-                                <HStack 
-                                    spacing={1}
-                                    _hover={{ color: "blue.500" }}
-                                    transition="all 0.2s"
-                                >
-                                    <Icon as={BiUpvote} />
-                                    <Text fontSize="sm">0</Text>
-                                </HStack>
-                                <HStack
-                                    spacing={1}
-                                    _hover={{ color: "red.500" }}
-                                    transition="all 0.2s"
-                                >
-                                    <Icon as={BiDownvote} />
-                                    <Text fontSize="sm">0</Text>
-                                </HStack>
-                                <HStack
-                                    spacing={1}
-                                    _hover={{ color: "purple.500" }}
-                                    transition="all 0.2s"
-                                >
-                                    <Icon as={BiComment} />
-                                    <Text fontSize="sm">0</Text>
-                                </HStack>
-                                
+                        <Box p={6}>
+                            <HStack spacing={4} mb={4}>
+                                <Avatar
+                                    size="md"
+                                    name={post.author.username}
+                                    src={`/avatars/${post.author.avatar_name}`}
+                                    border="2px solid black"
+                                />
+                                <VStack align="start" spacing={0}>
+                                    <Text fontWeight="bold">@{post.author.username}</Text>
+                                    <Text fontSize="sm" color="gray.600">
+                                        {formatPostDate(post.published_at)}
+                                    </Text>
+                                </VStack>
                                 {post.category && (
                                     <Badge
                                         ml="auto"
-                                        colorScheme="blue"
-                                        variant="subtle"
-                                        rounded="full"
                                         px={3}
                                         py={1}
-                                        fontSize="xs"
+                                        bg="black"
+                                        color="white"
+                                        borderRadius="0"
+                                        transform="rotate(-2deg)"
                                     >
                                         {post.category.name}
                                     </Badge>
                                 )}
-                            </MotionHStack>
+                            </HStack>
+
+                            <Box pl={12}>
+                                <Text fontSize="xl" fontWeight="bold" mb={2}>
+                                    {post.title}
+                                </Text>
+                                <Text color="gray.600" mb={4}>
+                                    {post.body}
+                                </Text>
+
+                                <HStack spacing={6} color="gray.600">
+                                    <HStack spacing={2}>
+                                        <Icon as={BiUpvote} boxSize={5} />
+                                        <Text>0</Text>
+                                    </HStack>
+                                    <HStack spacing={2}>
+                                        <Icon as={BiDownvote} boxSize={5} />
+                                        <Text>0</Text>
+                                    </HStack>
+                                    <HStack spacing={2}>
+                                        <Icon as={BiComment} boxSize={5} />
+                                        <Text>0</Text>
+                                    </HStack>
+                                </HStack>
+                            </Box>
                         </Box>
                     </MotionBox>
                 ))}

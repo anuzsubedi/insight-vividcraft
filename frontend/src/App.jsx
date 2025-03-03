@@ -16,9 +16,18 @@ import {
   Avatar,
   useToast,
   useColorModeValue,
+  Switch,
+  Textarea,
+  Select as ChakraSelect,
+  IconButton,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverBody,
 } from "@chakra-ui/react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDownIcon, AddIcon } from "@chakra-ui/icons";
+import { FiClock, FiSend } from 'react-icons/fi';
 import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
@@ -88,15 +97,13 @@ function App() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       minH="100vh"
-      bg={bgColor}
+      bg="gray.50"
     >
       {/* Header */}
       <Box
         py={4}
-        bg={headerBg}
-        backdropFilter="blur(10px)"
-        borderBottom="1px"
-        borderColor="gray.200"
+        bg="white"
+        borderBottom="3px solid black"
         position="sticky"
         top={0}
         zIndex={10}
@@ -104,62 +111,64 @@ function App() {
         <Container maxW="5xl">
           <HStack justify="space-between" align="center">
             <MotionBox
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ rotate: -2 }}
               transition={{ duration: 0.2 }}
             >
               <Logo size="2xl" />
             </MotionBox>
 
             <HStack spacing={6}>
-              <MotionBox whileHover={{ y: -2 }}>
-                <Button
-                  as={Link}
-                  to="/posts/new"
-                  colorScheme="blue"
-                  leftIcon={<AddIcon />}
-                  rounded="full"
-                  px={6}
-                  shadow="md"
-                >
-                  New Post
-                </Button>
-              </MotionBox>
+              <Button
+                as={Link}
+                to="/posts/new"
+                bg="black"
+                color="white"
+                border="2px solid black"
+                px={6}
+                h="45px"
+                _hover={{
+                  transform: "translate(-2px, -2px)",
+                  boxShadow: "4px 4px 0 0 #000",
+                }}
+                _active={{
+                  transform: "translate(0px, 0px)",
+                  boxShadow: "none",
+                }}
+              >
+                New Post
+              </Button>
 
               <Menu>
                 <MenuButton
                   as={Button}
-                  variant="ghost"
-                  rightIcon={<ChevronDownIcon />}
+                  bg="white"
+                  border="2px solid black"
+                  _hover={{
+                    transform: "translate(-2px, -2px)",
+                    boxShadow: "4px 4px 0 0 #000",
+                  }}
+                  _active={{
+                    transform: "translate(0px, 0px)",
+                    boxShadow: "none",
+                  }}
                 >
                   <HStack spacing={3}>
-                    {user.avatarName ? (
-                      <MotionBox
-                        as="img"
-                        whileHover={{ scale: 1.1 }}
-                        src={`/avatars/${user.avatarName}`}
-                        alt="Profile"
-                        w="32px"
-                        h="32px"
-                        rounded="full"
-                        border="2px solid"
-                        borderColor="blue.500"
-                      />
-                    ) : (
-                      <Avatar
-                        size="sm"
-                        name={user.displayName}
-                        bg="accent.100"
-                        color="white"
-                      />
-                    )}
-                    <Text>@{user.username}</Text>
+                    <Avatar
+                      size="sm"
+                      name={user.displayName}
+                      src={user.avatarName ? `/avatars/${user.avatarName}` : undefined}
+                      border="2px solid black"
+                    />
+                    <Text fontWeight="bold">@{user.username}</Text>
                   </HStack>
                 </MenuButton>
                 <MenuList
-                  border="1px solid"
-                  borderColor="gray.200"
-                  shadow="lg"
-                  rounded="md"
+                  bg="white"
+                  border="2px solid black"
+                  boxShadow="4px 4px 0 black"
+                  borderRadius="0"
+                  p={0}
+                  overflow="hidden"
                 >
                   <MenuItem
                     as={Link}
@@ -202,54 +211,111 @@ function App() {
       </Box>
 
       {/* Main Content */}
-      <MotionContainer
-        maxW="5xl"
-        py={8}
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-      >
-        {/* Welcome Section */}
-        <Box
-          bg="white"
-          p={8}
-          border="2px solid"
-          borderColor="black"
-          transform="translate(-4px, -4px)"
-          boxShadow="6px 6px 0 black"
-          position="relative"
-          _before={{
-            content: '""',
-            position: "absolute",
-            top: "15px",
-            left: "15px",
-            right: "-15px",
-            bottom: "-15px",
-            border: "2px solid black",
-            zIndex: -1,
-          }}
-        >
-          <VStack spacing={4} align="start">
-            <Heading size="xl">Welcome back, {user.displayName}!</Heading>
-            <Text fontSize="lg" color="paper.400">
-              Start exploring and sharing your insights with the community.
-            </Text>
-          </VStack>
-        </Box>
-
-        {/* Feed Section */}
+      <Container maxW="5xl" py={8}>
+        {/* New Post Box */}
         <MotionBox
-          bg="white"
-          rounded="xl"
-          shadow="sm"
-          overflow="hidden"
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
+          mb={8}
+          bg="white"
+          border="2px solid black"
+          transform="rotate(-1deg)"
+          boxShadow="6px 6px 0 black"
         >
-          <Feed />
+          <Box p={6}>
+            <HStack mb={4} justify="space-between">
+              <HStack>
+                <Text fontWeight="bold">Post Type:</Text>
+                <Switch size="lg" />
+                <Text color="gray.600">Article</Text>
+              </HStack>
+              <ChakraSelect
+                w="200px"
+                placeholder="Select category"
+                border="2px solid black"
+                borderRadius="0"
+                _hover={{
+                  transform: "translate(-2px, -2px)",
+                  boxShadow: "4px 4px 0 0 #000",
+                }}
+              >
+                <option value="tech">Technology</option>
+                <option value="design">Design</option>
+                <option value="ideas">Ideas</option>
+              </ChakraSelect>
+            </HStack>
+            
+            <Textarea
+              placeholder="What's on your mind?"
+              minH="120px"
+              mb={4}
+              border="2px solid black"
+              borderRadius="0"
+              _hover={{
+                transform: "translate(-2px, -2px)",
+                boxShadow: "4px 4px 0 0 #000",
+              }}
+              _focus={{
+                transform: "translate(-2px, -2px)",
+                boxShadow: "4px 4px 0 0 #000",
+                borderColor: "black",
+              }}
+            />
+            
+            <HStack justify="flex-end" spacing={4}>
+              <Popover placement="top">
+                <PopoverTrigger>
+                  <IconButton
+                    icon={<FiClock />}
+                    variant="outline"
+                    border="2px solid black"
+                    borderRadius="0"
+                    _hover={{
+                      transform: "translate(-2px, -2px)",
+                      boxShadow: "4px 4px 0 0 #000",
+                    }}
+                  />
+                </PopoverTrigger>
+                <PopoverContent
+                  border="2px solid black"
+                  borderRadius="0"
+                  boxShadow="4px 4px 0 black"
+                  w="auto"
+                >
+                  <PopoverBody>
+                    <VStack align="stretch" spacing={2}>
+                      <Button variant="ghost">Schedule</Button>
+                      <Button variant="ghost">Save as Draft</Button>
+                    </VStack>
+                  </PopoverBody>
+                </PopoverContent>
+              </Popover>
+              
+              <Button
+                rightIcon={<FiSend />}
+                bg="black"
+                color="white"
+                border="2px solid black"
+                borderRadius="0"
+                px={8}
+                _hover={{
+                  transform: "translate(-2px, -2px)",
+                  boxShadow: "4px 4px 0 0 #000",
+                }}
+                _active={{
+                  transform: "translate(0px, 0px)",
+                  boxShadow: "none",
+                }}
+              >
+                Send
+              </Button>
+            </HStack>
+          </Box>
         </MotionBox>
-      </MotionContainer>
+
+        {/* Feed */}
+        <Feed />
+      </Container>
     </MotionBox>
   );
 }
