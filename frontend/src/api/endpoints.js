@@ -18,9 +18,9 @@ export const ENDPOINTS = {
     },
     SOCIAL: {
         FOLLOW: (username) => `/api/social/follow/${username}`,
-        UNFOLLOW: (username) => `/api/social/unfollow/${username}`,
+        UNFOLLOW: (username) => `/api/social/follow/${username}`, // Changed from unfollow to follow
         MUTE: (username) => `/api/social/mute/${username}`,
-        UNMUTE: (username) => `/api/social/unmute/${username}`,
+        UNMUTE: (username) => `/api/social/mute/${username}`, // Changed from unmute to mute
         GET_STATUS: (username) => `/api/social/status/${username}`
     },
     POSTS: {
