@@ -214,7 +214,6 @@ function CreatePost({ onPostCreated }) {
             mb={8}
             bg="white"
             border="2px solid black"
-            transform="rotate(-1deg)"
             boxShadow="6px 6px 0 black"
         >
             <Box p={6}>
@@ -413,7 +412,7 @@ function CreatePost({ onPostCreated }) {
                         <MenuButton
                             as={Button}
                             rightIcon={<FiChevronDown />}
-                            bg="black"
+                            bg="teal.500"
                             color="white"
                             border="2px solid black"
                             borderRadius="0"
@@ -422,10 +421,12 @@ function CreatePost({ onPostCreated }) {
                             _hover={{
                                 transform: "translate(-2px, -2px)",
                                 boxShadow: "4px 4px 0 0 #000",
+                                bg: "teal.600"
                             }}
                             _active={{
                                 transform: "translate(0px, 0px)",
                                 boxShadow: "none",
+                                bg: "teal.700"
                             }}
                         >
                             Send
