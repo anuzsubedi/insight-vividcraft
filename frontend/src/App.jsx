@@ -1,9 +1,7 @@
 import { motion } from "framer-motion";
 import {
   Button,
-  Heading,
   Text,
-  VStack,
   HStack,
   Box,
   Container,
@@ -12,36 +10,22 @@ import {
   MenuList,
   MenuItem,
   Divider,
-  Image,
   Avatar,
   useToast,
   useColorModeValue,
-  Switch,
-  Textarea,
-  Select as ChakraSelect,
-  IconButton,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
 } from "@chakra-ui/react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDownIcon, AddIcon } from "@chakra-ui/icons";
-import { FiClock, FiSend } from 'react-icons/fi';
 import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
 
 const MotionBox = motion(Box);
-const MotionContainer = motion(Container);
 
 function App() {
   const { user, logout } = useAuthState();
   const navigate = useNavigate();
   const toast = useToast();
-  
   const bgColor = useColorModeValue("gray.50", "gray.900");
-  const headerBg = useColorModeValue("rgba(255, 255, 255, 0.8)", "rgba(26, 32, 44, 0.8)");
 
   const handleLogout = () => {
     logout();
@@ -212,108 +196,6 @@ function App() {
 
       {/* Main Content */}
       <Container maxW="5xl" py={8}>
-        {/* New Post Box */}
-        <MotionBox
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          mb={8}
-          bg="white"
-          border="2px solid black"
-          transform="rotate(-1deg)"
-          boxShadow="6px 6px 0 black"
-        >
-          <Box p={6}>
-            <HStack mb={4} justify="space-between">
-              <HStack>
-                <Text fontWeight="bold">Post Type:</Text>
-                <Switch size="lg" />
-                <Text color="gray.600">Article</Text>
-              </HStack>
-              <ChakraSelect
-                w="200px"
-                placeholder="Select category"
-                border="2px solid black"
-                borderRadius="0"
-                _hover={{
-                  transform: "translate(-2px, -2px)",
-                  boxShadow: "4px 4px 0 0 #000",
-                }}
-              >
-                <option value="tech">Technology</option>
-                <option value="design">Design</option>
-                <option value="ideas">Ideas</option>
-              </ChakraSelect>
-            </HStack>
-            
-            <Textarea
-              placeholder="What's on your mind?"
-              minH="120px"
-              mb={4}
-              border="2px solid black"
-              borderRadius="0"
-              _hover={{
-                transform: "translate(-2px, -2px)",
-                boxShadow: "4px 4px 0 0 #000",
-              }}
-              _focus={{
-                transform: "translate(-2px, -2px)",
-                boxShadow: "4px 4px 0 0 #000",
-                borderColor: "black",
-              }}
-            />
-            
-            <HStack justify="flex-end" spacing={4}>
-              <Popover placement="top">
-                <PopoverTrigger>
-                  <IconButton
-                    icon={<FiClock />}
-                    variant="outline"
-                    border="2px solid black"
-                    borderRadius="0"
-                    _hover={{
-                      transform: "translate(-2px, -2px)",
-                      boxShadow: "4px 4px 0 0 #000",
-                    }}
-                  />
-                </PopoverTrigger>
-                <PopoverContent
-                  border="2px solid black"
-                  borderRadius="0"
-                  boxShadow="4px 4px 0 black"
-                  w="auto"
-                >
-                  <PopoverBody>
-                    <VStack align="stretch" spacing={2}>
-                      <Button variant="ghost">Schedule</Button>
-                      <Button variant="ghost">Save as Draft</Button>
-                    </VStack>
-                  </PopoverBody>
-                </PopoverContent>
-              </Popover>
-              
-              <Button
-                rightIcon={<FiSend />}
-                bg="black"
-                color="white"
-                border="2px solid black"
-                borderRadius="0"
-                px={8}
-                _hover={{
-                  transform: "translate(-2px, -2px)",
-                  boxShadow: "4px 4px 0 0 #000",
-                }}
-                _active={{
-                  transform: "translate(0px, 0px)",
-                  boxShadow: "none",
-                }}
-              >
-                Send
-              </Button>
-            </HStack>
-          </Box>
-        </MotionBox>
-
-        {/* Feed */}
         <Feed />
       </Container>
     </MotionBox>
