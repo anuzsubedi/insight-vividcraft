@@ -212,7 +212,10 @@ function Connection({ isOpen, onClose, username, initialTab = "following" }) {
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">
-      <ModalOverlay backdropFilter="blur(4px)" />
+      <ModalOverlay 
+        backdropFilter="blur(8px)"
+        backgroundColor="rgba(0, 0, 0, 0.7)" 
+      />
       <ModalContent
         border="2px solid"
         borderColor="black"
