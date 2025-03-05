@@ -49,6 +49,7 @@ import AvatarSelector from "../components/AvatarSelector";
 import useAuthState from "../hooks/useAuthState";
 import { useInView } from 'react-intersection-observer';
 import CreatePost from "../components/CreatePost";
+import Connection from "../components/Connection";
 
 function Profile() {
   const { username } = useParams();
@@ -65,6 +66,8 @@ function Profile() {
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showConnections, setShowConnections] = useState(false);
+  const [activeConnectionTab, setActiveConnectionTab] = useState("following");
   
   // Posts state
   const [posts, setPosts] = useState([]);
@@ -669,17 +672,39 @@ function Profile() {
             )}
 
             <HStack spacing={8} mt={2}>
-              <VStack align="start" spacing={0}>
-                <Text fontSize="2xl" fontWeight="bold">
-                  {profile.followerCount || 0}
-                </Text>
-                <Text color="paper.400">Followers</Text>
-              </VStack>
-              <VStack align="start" spacing={0}>
+              <VStack 
+                align="start" 
+                spacing={0} 
+                cursor={isOwnProfile ? "pointer" : "default"}
+                onClick={() => {
+                  if (isOwnProfile) {
+                    setActiveConnectionTab("following");
+                    setShowConnections(true);
+                  }
+                }}
+                _hover={isOwnProfile ? { opacity: 0.8 } : undefined}
+              >
                 <Text fontSize="2xl" fontWeight="bold">
                   {profile.followingCount || 0}
                 </Text>
                 <Text color="paper.400">Following</Text>
+              </VStack>
+              <VStack 
+                align="start" 
+                spacing={0}
+                cursor={isOwnProfile ? "pointer" : "default"}
+                onClick={() => {
+                  if (isOwnProfile) {
+                    setActiveConnectionTab("followers");
+                    setShowConnections(true);
+                  }
+                }}
+                _hover={isOwnProfile ? { opacity: 0.8 } : undefined}
+              >
+                <Text fontSize="2xl" fontWeight="bold">
+                  {profile.followerCount || 0}
+                </Text>
+                <Text color="paper.400">Followers</Text>
               </VStack>
               <VStack align="start" spacing={0}>
                 <Text fontSize="2xl" fontWeight="bold">
@@ -936,6 +961,12 @@ function Profile() {
         onClose={onClose}
         onSelect={handleAvatarUpdate}
         currentAvatar={profile?.avatarName}
+      />
+      <Connection
+        isOpen={showConnections}
+        onClose={() => setShowConnections(false)}
+        username={username}
+        initialTab={activeConnectionTab}
       />
     </Box>
   );
