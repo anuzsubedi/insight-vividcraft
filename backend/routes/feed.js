@@ -42,7 +42,19 @@ router.get('/following', authMiddleware, async (req, res) => {
         const userIds = followingIds.map(f => f.following_id);
 
         // Get posts from users being followed
-        const { data: followingPosts, error: postsError } = await supabase
+        const { data: mutedUsers, error: mutedError } = await supabase
+            .from('mutes')
+            .select('muted_id')
+            .eq('user_id', user.userId);
+
+        if (mutedError) {
+            console.error('Muted users query error:', mutedError);
+            throw mutedError;
+        }
+
+        const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
+        
+        let query = supabase
             .from('posts')
             .select(`
                 *,
@@ -50,7 +62,15 @@ router.get('/following', authMiddleware, async (req, res) => {
                 category:categories!posts_category_id_fkey (id, name)
             `)
             .eq('status', 'published')
-            .in('author_id', userIds)
+            .in('author_id', userIds);
+
+        // Only add muted filter if there are muted users
+        if (mutedIds.length > 0) {
+            query = query.filter('author_id', 'not.in', `(${mutedIds.join(',')})`);
+        }
+
+        // Get posts from users being followed
+        const { data: followingPosts, error: postsError } = await query
             .order('published_at', { ascending: false })
             .range(offset, offset + limit - 1);
 
@@ -119,8 +139,20 @@ router.get('/network', authMiddleware, async (req, res) => {
         ];
         const uniqueUserIds = [...new Set(networkUserIds)];
 
-        // Get posts from both following and network users
-        const { data: networkPosts, error: postsError } = await supabase
+        // Get muted users
+        const { data: mutedUsers, error: mutedError } = await supabase
+            .from('mutes')
+            .select('muted_id')
+            .eq('user_id', user.userId);
+
+        if (mutedError) {
+            console.error('Muted users query error:', mutedError);
+            throw mutedError;
+        }
+
+        const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
+
+        let query = supabase
             .from('posts')
             .select(`
                 *,
@@ -129,7 +161,15 @@ router.get('/network', authMiddleware, async (req, res) => {
             `)
             .eq('status', 'published')
             .in('author_id', uniqueUserIds)
-            .not('author_id', 'eq', user.userId) // Exclude your own posts
+            .not('author_id', 'eq', user.userId); // Exclude your own posts
+
+        // Only add muted filter if there are muted users
+        if (mutedIds.length > 0) {
+            query = query.filter('author_id', 'not.in', `(${mutedIds.join(',')})`);
+        }
+
+        // Get posts from both following and network users
+        const { data: networkPosts, error: postsError } = await query
             .order('published_at', { ascending: false })
             .range(offset, offset + limit - 1);
 
@@ -166,21 +206,35 @@ router.get('/explore', authMiddleware, async (req, res) => {
 
             if (categoryError) throw categoryError;
 
-            // Get random posts from all categories, excluding muted users
-            const { data: explorePosts, error } = await supabase
+            // Get muted users
+            const { data: mutedUsers, error: mutedError } = await supabase
+                .from('mutes')
+                .select('muted_id')
+                .eq('user_id', user.userId);
+
+            if (mutedError) {
+                console.error('Muted users query error:', mutedError);
+                throw mutedError;
+            }
+
+            const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
+
+            let query = supabase
                 .from('posts')
                 .select(`
                     *,
                     author:user_id (username, display_name, avatar_name),
                     category:category_id (id, name)
                 `)
-                .eq('status', 'published')
-                .not('user_id', 'in',
-                    supabase
-                        .from('mutes')
-                        .select('muted_id')
-                        .eq('muter_id', user.id)
-                )
+                .eq('status', 'published');
+
+            // Only add muted filter if there are muted users
+            if (mutedIds.length > 0) {
+                query = query.filter('user_id', 'not.in', `(${mutedIds.join(',')})`);
+            }
+
+            // Get random posts from all categories, excluding muted users
+            const { data: explorePosts, error } = await query
                 .order('published_at', { ascending: false })
                 .range(offset, offset + limit - 1);
 
@@ -197,8 +251,20 @@ router.get('/explore', authMiddleware, async (req, res) => {
             });
         }
 
-        // Get posts from selected categories, excluding muted users
-        const { data: explorePosts, error } = await supabase
+        // Get muted users for category-filtered explore
+        const { data: mutedUsers, error: mutedError } = await supabase
+            .from('mutes')
+            .select('muted_id')
+            .eq('user_id', user.userId);
+
+        if (mutedError) {
+            console.error('Muted users query error:', mutedError);
+            throw mutedError;
+        }
+
+        const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
+
+        let query = supabase
             .from('posts')
             .select(`
                 *,
@@ -206,13 +272,15 @@ router.get('/explore', authMiddleware, async (req, res) => {
                 category:category_id (id, name)
             `)
             .eq('status', 'published')
-            .in('category_id', categoryIds)
-            .not('user_id', 'in',
-                supabase
-                    .from('mutes')
-                    .select('muted_id')
-                    .eq('muter_id', user.id)
-            )
+            .in('category_id', categoryIds);
+
+        // Only add muted filter if there are muted users
+        if (mutedIds.length > 0) {
+            query = query.filter('user_id', 'not.in', `(${mutedIds.join(',')})`);
+        }
+
+        // Get posts from selected categories, excluding muted users
+        const { data: explorePosts, error } = await query
             .order('published_at', { ascending: false })
             .range(offset, offset + limit - 1);
 
