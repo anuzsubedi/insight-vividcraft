@@ -16,21 +16,19 @@ import {
     MenuOptionGroup,
     useToast,
     Avatar,
-    Flex,
-    Divider,
     Icon
 } from '@chakra-ui/react';
-import { ChevronDownIcon } from '@chakra-ui/icons';
+
 import { feedService } from '../services/feedService';
 import { useNavigate } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
-import { Link } from 'react-router-dom';
+
 import { BiUpvote, BiDownvote, BiComment } from 'react-icons/bi';
 import { motion } from "framer-motion";
 
 const MotionBox = motion(Box);
-const MotionHStack = motion(HStack);
+
 
 // Helper function to format date
 const formatPostDate = (date) => {
