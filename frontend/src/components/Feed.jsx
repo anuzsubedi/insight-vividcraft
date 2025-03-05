@@ -16,19 +16,16 @@ import {
     MenuOptionGroup,
     useToast,
     Avatar,
-    Icon
+    Icon,
 } from '@chakra-ui/react';
-
+import { FaNewspaper, FaComment } from 'react-icons/fa';
 import { feedService } from '../services/feedService';
-import { useNavigate } from 'react-router-dom';
+import categoryService from '../services/categoryService';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
-
 import { BiUpvote, BiDownvote, BiComment } from 'react-icons/bi';
-import { motion } from "framer-motion";
-
-const MotionBox = motion(Box);
-
+import { useNavigate, useLocation } from 'react-router-dom';
+import CreatePost from './CreatePost';
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -36,6 +33,8 @@ const formatPostDate = (date) => {
 };
 
 function Feed() {
+    const navigate = useNavigate();
+    const location = useLocation();
     const [feedType, setFeedType] = useState('following');
     const [posts, setPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -43,9 +42,26 @@ function Feed() {
     const [hasMore, setHasMore] = useState(true);
     const [categories, setCategories] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
-    const navigate = useNavigate();
     const toast = useToast();
     const { ref, inView } = useInView();
+
+    // Load categories
+    useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const response = await categoryService.getCategories();
+                setCategories(response.categories || []);
+            } catch (error) {
+                toast({
+                    title: 'Error loading categories',
+                    description: error.message,
+                    status: 'error',
+                    duration: 3000,
+                });
+            }
+        };
+        fetchCategories();
+    }, [toast]);
 
     // Load feed posts
     const loadPosts = useCallback(async () => {
@@ -60,8 +76,8 @@ function Feed() {
                 case 'following':
                     response = await feedService.getFollowingFeed(params);
                     break;
-                case 'network': // Changed from 'extended'
-                    response = await feedService.getNetworkFeed(params); // Changed function name
+                case 'network':
+                    response = await feedService.getNetworkFeed(params);
                     break;
                 case 'explore':
                     if (selectedCategories.length > 0) {
@@ -127,88 +143,96 @@ function Feed() {
         setSelectedCategories(values);
     };
 
+    // Handle post creation completion
+    const handlePostCreated = () => {
+        setPosts([]);
+        setPage(1);
+        setHasMore(true);
+    };
+
+    const handlePostClick = (postId) => {
+        navigate(`/posts/${postId}`, { state: { from: location.pathname } });
+    };
+
     return (
         <VStack spacing={6} align="stretch">
-            {/* Feed Type Selector */}
-            <HStack 
-                spacing={4} 
-                p={6}
-                bg="white"
-                border="2px solid black"
-                transform="rotate(1deg)"
-                boxShadow="6px 6px 0 black"
-            >
-                <ChakraSelect
-                    value={feedType}
-                    onChange={(e) => handleFeedTypeChange(e.target.value)}
-                    w="200px"
-                    border="2px solid black"
-                    borderRadius="0"
-                    _hover={{
-                        transform: "translate(-2px, -2px)",
-                        boxShadow: "4px 4px 0 0 #000",
-                    }}
-                >
-                    <option value="following">Following</option>
-                    <option value="network">Network</option> {/* Changed from "extended" */}
-                    <option value="explore">Explore</option>
-                </ChakraSelect>
+            {/* Create Post Form */}
+            <CreatePost categories={categories} onPostCreated={handlePostCreated} />
 
-                {feedType === 'explore' && (
-                    <Menu closeOnSelect={false}>
-                        <MenuButton
-                            as={Button}
-                            bg="white"
-                            border="2px solid black"
-                            borderRadius="0"
-                            _hover={{
-                                transform: "translate(-2px, -2px)",
-                                boxShadow: "4px 4px 0 0 #000",
-                            }}
-                        >
-                            Categories
-                        </MenuButton>
-                        <MenuList
-                            border="2px solid black"
-                            borderRadius="0"
-                            boxShadow="4px 4px 0 black"
-                        >
-                            <MenuOptionGroup
-                                type="checkbox"
-                                value={selectedCategories}
-                                onChange={handleCategoryChange}
+            {/* Feed Type Selector */}
+            <Box p={6} bg="white" border="2px solid black" boxShadow="6px 6px 0 black">
+                <HStack spacing={4}>
+                    <ChakraSelect
+                        value={feedType}
+                        onChange={(e) => handleFeedTypeChange(e.target.value)}
+                        w="200px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            transform: "translate(-2px, -2px)",
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="following">Following</option>
+                        <option value="network">Network</option>
+                        <option value="explore">Explore</option>
+                    </ChakraSelect>
+
+                    {feedType === 'explore' && (
+                        <Menu closeOnSelect={false}>
+                            <MenuButton
+                                as={Button}
+                                bg="white"
+                                border="2px solid black"
+                                borderRadius="0"
+                                _hover={{
+                                    transform: "translate(-2px, -2px)",
+                                    boxShadow: "4px 4px 0 0 #000",
+                                }}
                             >
-                                {categories.map(category => (
-                                    <MenuItemOption
-                                        key={category.id}
-                                        value={category.id}
-                                        _hover={{ bg: "paper.100" }}
-                                    >
-                                        {category.name}
-                                    </MenuItemOption>
-                                ))}
-                            </MenuOptionGroup>
-                        </MenuList>
-                    </Menu>
-                )}
-            </HStack>
+                                Categories
+                            </MenuButton>
+                            <MenuList
+                                border="2px solid black"
+                                borderRadius="0"
+                                boxShadow="4px 4px 0 black"
+                            >
+                                <MenuOptionGroup
+                                    type="checkbox"
+                                    value={selectedCategories}
+                                    onChange={handleCategoryChange}
+                                >
+                                    {categories.map(category => (
+                                        <MenuItemOption
+                                            key={category.id}
+                                            value={category.id}
+                                            _hover={{ bg: "paper.100" }}
+                                        >
+                                            {category.name}
+                                        </MenuItemOption>
+                                    ))}
+                                </MenuOptionGroup>
+                            </MenuList>
+                        </Menu>
+                    )}
+                </HStack>
+            </Box>
 
             {/* Posts */}
             <VStack spacing={6} align="stretch">
-                {posts.map((post, index) => (
-                    <MotionBox
+                {posts.map((post) => (
+                    <Box
                         key={post.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
                         bg="white"
                         border="2px solid black"
-                        transform={index % 2 === 0 ? "rotate(1deg)" : "rotate(-1deg)"}
                         boxShadow="6px 6px 0 black"
                         _hover={{
                             transform: "translate(-2px, -2px)",
                             boxShadow: "8px 8px 0 black",
+                            cursor: "pointer"
                         }}
+                        onClick={() => handlePostClick(post.id)}
+                        position="relative"
                     >
                         <Box p={6}>
                             <HStack spacing={4} mb={4}>
@@ -224,26 +248,37 @@ function Feed() {
                                         {formatPostDate(post.published_at)}
                                     </Text>
                                 </VStack>
-                                {post.category && (
-                                    <Badge
-                                        ml="auto"
-                                        px={3}
-                                        py={1}
-                                        bg="black"
-                                        color="white"
-                                        borderRadius="0"
-                                        transform="rotate(-2deg)"
-                                    >
-                                        {post.category.name}
-                                    </Badge>
-                                )}
+                                <HStack spacing={2} ml="auto">
+                                    {post.category && (
+                                        <Badge
+                                            px={3}
+                                            py={1}
+                                            bg="black"
+                                            color="white"
+                                            borderRadius="0"
+                                        >
+                                            {post.category.name}
+                                        </Badge>
+                                    )}
+                                </HStack>
                             </HStack>
 
-                            <Box pl={12}>
-                                <Text fontSize="xl" fontWeight="bold" mb={2}>
-                                    {post.title}
-                                </Text>
-                                <Text color="gray.600" mb={4}>
+                            <Box pl={12} pr={10}>
+                                {post.type === 'article' && post.title && (
+                                    <Text 
+                                        fontWeight="bold"
+                                        fontSize="2xl"
+                                        mb={3}
+                                    >
+                                        {post.title}
+                                    </Text>
+                                )}
+                                <Text 
+                                    fontSize="lg" 
+                                    mb={4}
+                                    color="gray.700"
+                                    whiteSpace="pre-wrap"
+                                >
                                     {post.body}
                                 </Text>
 
@@ -262,8 +297,22 @@ function Feed() {
                                     </HStack>
                                 </HStack>
                             </Box>
+
+                            {/* Post type indicator */}
+                            <Box
+                                position="absolute"
+                                right={4}
+                                top={4}
+                                opacity={0.15}
+                            >
+                                <Icon
+                                    as={post.type === 'article' ? FaNewspaper : FaComment}
+                                    boxSize={6}
+                                    color="black"
+                                />
+                            </Box>
                         </Box>
-                    </MotionBox>
+                    </Box>
                 ))}
 
                 {isLoading && (
