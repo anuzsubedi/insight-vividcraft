@@ -40,5 +40,45 @@ export const socialService = {
             console.error('[UNMUTE USER] Error:', error);
             throw error;
         }
+    },
+
+    async getFollowing(username) {
+        try {
+            const response = await api.get(ENDPOINTS.SOCIAL.GET_FOLLOWING(username));
+            return response.data;
+        } catch (error) {
+            console.error('[GET FOLLOWING] Error:', error);
+            throw error;
+        }
+    },
+
+    async getFollowers(username) {
+        try {
+            const response = await api.get(ENDPOINTS.SOCIAL.GET_FOLLOWERS(username));
+            return response.data;
+        } catch (error) {
+            console.error('[GET FOLLOWERS] Error:', error);
+            throw error;
+        }
+    },
+
+    async getMutualFollowers(username) {
+        try {
+            const response = await api.get(ENDPOINTS.SOCIAL.GET_MUTUAL(username));
+            return response.data;
+        } catch (error) {
+            console.error('[GET MUTUAL FOLLOWERS] Error:', error);
+            throw error;
+        }
+    },
+
+    async removeFollower(username) {
+        try {
+            const response = await api.delete(ENDPOINTS.SOCIAL.REMOVE_FOLLOWER(username));
+            return response.data;
+        } catch (error) {
+            console.error('[REMOVE FOLLOWER] Error:', error);
+            throw error;
+        }
     }
 };

@@ -48,6 +48,8 @@ import { socialService } from "../services/socialService";
 import AvatarSelector from "../components/AvatarSelector";
 import useAuthState from "../hooks/useAuthState";
 import { useInView } from 'react-intersection-observer';
+import CreatePost from "../components/CreatePost";
+import Connection from "../components/Connection";
 
 function Profile() {
   const { username } = useParams();
@@ -64,6 +66,8 @@ function Profile() {
   const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showConnections, setShowConnections] = useState(false);
+  const [activeConnectionTab, setActiveConnectionTab] = useState("following");
   
   // Posts state
   const [posts, setPosts] = useState([]);
@@ -668,17 +672,39 @@ function Profile() {
             )}
 
             <HStack spacing={8} mt={2}>
-              <VStack align="start" spacing={0}>
-                <Text fontSize="2xl" fontWeight="bold">
-                  {profile.followerCount || 0}
-                </Text>
-                <Text color="paper.400">Followers</Text>
-              </VStack>
-              <VStack align="start" spacing={0}>
+              <VStack 
+                align="start" 
+                spacing={0} 
+                cursor={isOwnProfile ? "pointer" : "default"}
+                onClick={() => {
+                  if (isOwnProfile) {
+                    setActiveConnectionTab("following");
+                    setShowConnections(true);
+                  }
+                }}
+                _hover={isOwnProfile ? { opacity: 0.8 } : undefined}
+              >
                 <Text fontSize="2xl" fontWeight="bold">
                   {profile.followingCount || 0}
                 </Text>
                 <Text color="paper.400">Following</Text>
+              </VStack>
+              <VStack 
+                align="start" 
+                spacing={0}
+                cursor={isOwnProfile ? "pointer" : "default"}
+                onClick={() => {
+                  if (isOwnProfile) {
+                    setActiveConnectionTab("followers");
+                    setShowConnections(true);
+                  }
+                }}
+                _hover={isOwnProfile ? { opacity: 0.8 } : undefined}
+              >
+                <Text fontSize="2xl" fontWeight="bold">
+                  {profile.followerCount || 0}
+                </Text>
+                <Text color="paper.400">Followers</Text>
               </VStack>
               <VStack align="start" spacing={0}>
                 <Text fontSize="2xl" fontWeight="bold">
@@ -730,6 +756,15 @@ function Profile() {
           mt={8}
         >
           <VStack spacing={6} w="100%" align="stretch">
+            {/* Add CreatePost only for own profile */}
+            {isOwnProfile && (
+              <CreatePost onPostCreated={() => {
+                setPosts([]);
+                setPage(1);
+                setHasMore(true);
+              }} />
+            )}
+
             {/* Filters and Tabs */}
             <Flex direction={{ base: "column", md: "row" }} gap={4} mb={4}>
               <Tabs flex={1} variant="enclosed">
@@ -781,10 +816,10 @@ function Profile() {
                 border="2px solid"
                 borderColor="black"
                 bg="white"
-                transform="rotate(0.5deg)"
+                transform="none"
                 boxShadow="5px 5px 0 black"
                 _hover={{
-                  transform: "rotate(0.5deg) translate(-3px, -3px)",
+                  transform: "translate(-3px, -3px)",
                   boxShadow: "8px 8px 0 black",
                   cursor: "pointer"
                 }}
@@ -926,6 +961,12 @@ function Profile() {
         onClose={onClose}
         onSelect={handleAvatarUpdate}
         currentAvatar={profile?.avatarName}
+      />
+      <Connection
+        isOpen={showConnections}
+        onClose={() => setShowConnections(false)}
+        username={username}
+        initialTab={activeConnectionTab}
       />
     </Box>
   );

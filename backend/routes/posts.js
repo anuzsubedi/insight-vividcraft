@@ -35,23 +35,54 @@ router.post("/", verifyToken, async (req, res) => {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
         const authorId = req.user.userId;
 
-        if (!title || !type || !status) {
-            return res.status(400).json({ error: "Missing required fields" });
+        console.log('Creating post with data:', {
+            title, type, categoryId, status,
+            bodyLength: body?.length,
+            tagsCount: tags?.length,
+            scheduledFor,
+            authorId
+        });
+
+        // Validation with detailed errors
+        const validationErrors = {};
+        if (!body) validationErrors.body = "Content is required";
+        if (!type) validationErrors.type = "Type is required";
+        if (!status) validationErrors.status = "Status is required";
+        
+        // Only require category for articles
+        if (type === 'article' && !categoryId) {
+            validationErrors.categoryId = "Category is required for articles";
+        }
+        
+        if (Object.keys(validationErrors).length > 0) {
+            console.log('Validation errors:', validationErrors);
+            return res.status(400).json({ 
+                error: "Missing required fields",
+                details: validationErrors
+            });
+        }
+
+        if (type === 'article' && !title?.trim()) {
+            console.log('Article validation error: missing title');
+            return res.status(400).json({ error: "Title is required for articles" });
         }
 
         const { data: post, error: postError } = await supabase
             .from('posts')
             .insert({
-                title,
-                slug: await generateUniqueSlug(title),
+                title: title || '',
+                // Generate slug for all posts, using timestamp if no title
+                slug: title ? 
+                    await generateUniqueSlug(title) : 
+                    await generateUniqueSlug(`post-${Date.now()}`),
                 body,
                 type,
-                category_id: categoryId,
+                category_id: type === 'article' ? categoryId : null,
                 author_id: authorId,
                 status,
                 scheduled_for: status === 'scheduled' ? scheduledFor : null,
                 published_at: status === 'published' ? new Date().toISOString() : null,
-                tags: Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : []
+                tags: type === 'article' && Array.isArray(tags) ? tags.map(tag => tag.toLowerCase()) : []
             })
             .select(`
                 *,
@@ -59,17 +90,33 @@ router.post("/", verifyToken, async (req, res) => {
             `)
             .single();
 
-        if (postError || !post) {
-            return res.status(500).json({ error: "Failed to create post" });
+        if (postError) {
+            console.error('Database error while creating post:', postError);
+            return res.status(500).json({ 
+                error: "Failed to create post", 
+                details: postError.message 
+            });
         }
 
+        if (!post) {
+            console.error('No post data returned after creation');
+            return res.status(500).json({ 
+                error: "Failed to create post",
+                details: "No post data returned from database" 
+            });
+        }
+
+        console.log('Post created successfully:', { postId: post.id, type: post.type });
         return res.status(201).json({
             message: "Post created successfully",
             post
         });
     } catch (error) {
-        console.error('Create post error:', error);
-        return res.status(500).json({ error: "Failed to create post" });
+        console.error('Unexpected error in post creation:', error);
+        return res.status(500).json({ 
+            error: "Failed to create post",
+            details: error.message
+        });
     }
 });
 
