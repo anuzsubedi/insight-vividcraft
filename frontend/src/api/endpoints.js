@@ -18,10 +18,14 @@ export const ENDPOINTS = {
     },
     SOCIAL: {
         FOLLOW: (username) => `/api/social/follow/${username}`,
-        UNFOLLOW: (username) => `/api/social/follow/${username}`, // Changed from unfollow to follow
+        UNFOLLOW: (username) => `/api/social/follow/${username}`, // DELETE method
         MUTE: (username) => `/api/social/mute/${username}`,
-        UNMUTE: (username) => `/api/social/mute/${username}`, // Changed from unmute to mute
-        GET_STATUS: (username) => `/api/social/status/${username}`
+        UNMUTE: (username) => `/api/social/mute/${username}`, // DELETE method
+        GET_STATUS: (username) => `/api/social/status/${username}`,
+        GET_FOLLOWING: (username) => `/api/social/${username}/following`,
+        GET_FOLLOWERS: (username) => `/api/social/${username}/followers`,
+        GET_MUTUAL: (username) => `/api/social/${username}/mutual`,
+        REMOVE_FOLLOWER: (username) => `/api/social/remove-follower/${username}`
     },
     POSTS: {
         CREATE: '/api/posts',
