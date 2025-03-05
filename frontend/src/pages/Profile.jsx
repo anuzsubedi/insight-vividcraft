@@ -48,6 +48,7 @@ import { socialService } from "../services/socialService";
 import AvatarSelector from "../components/AvatarSelector";
 import useAuthState from "../hooks/useAuthState";
 import { useInView } from 'react-intersection-observer';
+import CreatePost from "../components/CreatePost";
 
 function Profile() {
   const { username } = useParams();
@@ -730,6 +731,15 @@ function Profile() {
           mt={8}
         >
           <VStack spacing={6} w="100%" align="stretch">
+            {/* Add CreatePost only for own profile */}
+            {isOwnProfile && (
+              <CreatePost onPostCreated={() => {
+                setPosts([]);
+                setPage(1);
+                setHasMore(true);
+              }} />
+            )}
+
             {/* Filters and Tabs */}
             <Flex direction={{ base: "column", md: "row" }} gap={4} mb={4}>
               <Tabs flex={1} variant="enclosed">
@@ -781,10 +791,10 @@ function Profile() {
                 border="2px solid"
                 borderColor="black"
                 bg="white"
-                transform="rotate(0.5deg)"
+                transform="none"
                 boxShadow="5px 5px 0 black"
                 _hover={{
-                  transform: "rotate(0.5deg) translate(-3px, -3px)",
+                  transform: "translate(-3px, -3px)",
                   boxShadow: "8px 8px 0 black",
                   cursor: "pointer"
                 }}
