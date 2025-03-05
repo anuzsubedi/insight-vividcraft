@@ -29,6 +29,8 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
       tags: [],
       status: "draft",
       scheduledFor: "",
+      scheduledDate: "",
+      scheduledTime: "00:00", // Default to 12:00 AM
     }
   );
   const [tagInput, setTagInput] = useState("");
@@ -126,12 +128,35 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    if (name === "scheduledDate" || name === "scheduledTime") {
+      // Combine date and time when either is changed
+      const date = name === "scheduledDate" ? value : formData.scheduledDate;
+      const time = name === "scheduledTime" ? value : formData.scheduledTime;
+      
+      if (date) {
+        const combinedDateTime = `${date}T${time || "00:00"}`;
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          scheduledFor: combinedDateTime
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          scheduledFor: ""
+        }));
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
+
     if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -243,14 +268,42 @@ function PostForm({ onSubmit, initialData, isEditing = false }) {
 
         {formData.status === "scheduled" && (
           <FormControl isInvalid={!!errors.scheduledFor}>
-            <FormLabel>Schedule Time</FormLabel>
-            <Input
-              name="scheduledFor"
-              type="datetime-local"
-              value={formData.scheduledFor}
-              onChange={handleChange}
-              min={new Date().toISOString().slice(0, 16)}
-            />
+            <FormLabel>Schedule Publication</FormLabel>
+            <VStack spacing={3} align="stretch">
+              <Box>
+                <FormLabel fontSize="sm">Date</FormLabel>
+                <Input
+                  name="scheduledDate"
+                  type="date"
+                  value={formData.scheduledDate}
+                  onChange={handleChange}
+                  min={new Date().toISOString().split('T')[0]}
+                  borderWidth="2px"
+                  borderColor="black"
+                  _hover={{ borderColor: "accent.100" }}
+                  _focus={{ 
+                    borderColor: "accent.100",
+                    boxShadow: "3px 3px 0 black"
+                  }}
+                />
+              </Box>
+              <Box>
+                <FormLabel fontSize="sm">Time (optional - defaults to 12:00 AM)</FormLabel>
+                <Input
+                  name="scheduledTime"
+                  type="time"
+                  value={formData.scheduledTime}
+                  onChange={handleChange}
+                  borderWidth="2px"
+                  borderColor="black"
+                  _hover={{ borderColor: "accent.100" }}
+                  _focus={{ 
+                    borderColor: "accent.100",
+                    boxShadow: "3px 3px 0 black"
+                  }}
+                />
+              </Box>
+            </VStack>
             <FormErrorMessage>{errors.scheduledFor}</FormErrorMessage>
           </FormControl>
         )}
