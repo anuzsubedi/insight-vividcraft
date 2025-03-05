@@ -198,4 +198,165 @@ router.get("/status/:username", verifyToken, async (req, res) => {
     }
 });
 
+// Get users that a user is following
+router.get('/:username/following', verifyToken, async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // First get the user's ID
+        const { data: user } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Get the following relationships with user details
+        const { data: following, error } = await supabase
+            .from('follows')
+            .select(`
+                following_id,
+                following:users!follows_following_id_fkey (
+                    username,
+                    display_name,
+                    avatar_name
+                )
+            `)
+            .eq('follower_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Transform the data structure
+        const users = following.map(f => ({
+            username: f.following.username,
+            displayName: f.following.display_name,
+            avatarName: f.following.avatar_name
+        }));
+
+        res.json({ users });
+    } catch (error) {
+        console.error('Error getting following:', error);
+        res.status(500).json({ error: 'Failed to get following users' });
+    }
+});
+
+// Get users who follow a user
+router.get('/:username/followers', verifyToken, async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // First get the user's ID
+        const { data: user } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Get the follower relationships with user details
+        const { data: followers, error } = await supabase
+            .from('follows')
+            .select(`
+                follower_id,
+                follower:users!follows_follower_id_fkey (
+                    username,
+                    display_name,
+                    avatar_name
+                )
+            `)
+            .eq('following_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Transform the data structure
+        const users = followers.map(f => ({
+            username: f.follower.username,
+            displayName: f.follower.display_name,
+            avatarName: f.follower.avatar_name
+        }));
+
+        res.json({ users });
+    } catch (error) {
+        console.error('Error getting followers:', error);
+        res.status(500).json({ error: 'Failed to get followers' });
+    }
+});
+
+// Get mutual followers (users who follow each other)
+router.get('/:username/mutual', verifyToken, async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // First get the user's ID
+        const { data: user } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Get mutual followers using a self-join
+        const { data: mutuals, error } = await supabase
+            .rpc('get_mutual_followers', { user_id: user.id });
+
+        if (error) throw error;
+
+        // Transform the data structure
+        const users = mutuals.map(m => ({
+            username: m.username,
+            displayName: m.display_name,
+            avatarName: m.avatar_name
+        }));
+
+        res.json({ users });
+    } catch (error) {
+        console.error('Error getting mutual followers:', error);
+        res.status(500).json({ error: 'Failed to get mutual followers' });
+    }
+});
+
+// Remove a follower
+router.delete('/remove-follower/:username', verifyToken, async (req, res) => {
+    try {
+        const currentUser = req.user;
+        const { username } = req.params;
+
+        // Get the follower to remove
+        const { data: followerToRemove } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (!followerToRemove) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Delete follow relationship
+        const { error } = await supabase
+            .from('follows')
+            .delete()
+            .eq('follower_id', followerToRemove.id)
+            .eq('following_id', currentUser.userId);
+
+        if (error) throw error;
+
+        res.json({ message: 'Successfully removed follower' });
+    } catch (error) {
+        console.error('Error removing follower:', error);
+        res.status(500).json({ error: 'Failed to remove follower' });
+    }
+});
+
 export default router;
