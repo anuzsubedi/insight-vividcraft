@@ -48,5 +48,10 @@ export const ENDPOINTS = {
         FOLLOWING: '/api/feed/following',
         NETWORK: '/api/feed/network', // Changed from EXTENDED
         EXPLORE: '/api/feed/explore',
+    },
+    REACTIONS: {
+        GET: (postId) => `/api/posts/reactions/${postId}`,  // Fetch reactions for a post
+        ADD: '/api/posts/reactions',  // Add upvote/downvote
+        REMOVE: '/api/posts/reactions' // Remove upvote/downvote
     }
 };

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import useAuthState from '../hooks/useAuthState';
 
+
 const api = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL,
     timeout: 15000, // Increase timeout to 15 seconds
@@ -93,5 +94,7 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+
 
 export default api;

@@ -520,4 +520,134 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
     }
 });
 
+//Get reactions count for a post
+router.get("/reactions/:postId", async (req, res) => {
+    try {
+        const { postId } = req.params;
+
+        const { data: reactions, error } = await supabase
+            .from('post_reactions')
+            .select('type, count')
+            .eq('post_id', postId)
+            .group('type');
+
+        if (error || !reactions) {
+            return res.status(404).json({error: "Reactions not found for this post"});
+        }
+
+        const reactionCounts = reactions.reduce((counts, reaction) => {
+            counts[reaction.type] = reaction.count;
+            return counts;
+        }, {});
+
+        return res.status(200).json({ reactions: reactionCounts });
+
+        } catch (error) {
+            console.error('Get reactions error:', error);
+            return res.status(500).json({
+                error: "Failed to fetch reactions",
+                details: error.message
+            });
+        }
+    });
+
+// Add or update reaction to a post
+router.post("/reactions", verifyToken, async (req, res) => {
+    try{
+        const { postId, type } = req.body;
+        const userId = req.user.userId;
+
+        if (!postId || !type) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        const { data: existingReaction, error: fetchError } = await supabase
+            .from('post_reactions')
+            .select('*')
+            .eq('post_id', postId)
+            .eq('user_id', userId)
+            .single();
+
+        if (fetchError) {
+            return res.status(500).json({ error: "Failed to add reaction" });
+        }
+
+        if (existingReaction) {
+            if (existingReaction.type === type) {
+                return res.status(400).json({ message: "Reaction already exists", reaction: existingReaction });
+            }
+
+            const { error: updateError } = await supabase
+                .from('post_reactions')
+                .update({ type })
+                .eq('post_id', postId)
+                .eq('user_id', userId);
+                
+            if (updateError) {
+                return res.status(500).json({ error: "Failed to updating reaction" });
+            }
+
+            return res.status(200).json({ message: "Reaction updated successfully" });
+        }
+
+        const { data: reaction, error: insertError } = await supabase
+            .from('post_reactions')
+            .insert({
+                post_id: postId, 
+                user_id: userId,
+                type
+            })
+            .single();
+
+        if (insertError) {
+            return res.status(500).json({ error: "Failed to add reaction" });
+        }
+
+        return res.status(201).json({ message: "Reaction added successfully", reaction });     
+    } catch (error) {
+        console.error('Add reaction error:', error);
+        return res.status(500).json({ error: "Failed to add reaction", details: error.message });
+    }
+});
+
+// Remove a reaction from a post
+router.delete("/reactions", verifyToken, async (req, res) => {
+    try {
+        const { postId } = req.body;
+        const userId = req.user.userId;
+
+        if (!postId) {
+            return res.status(400).json({ error: "Missing postId" });
+        }
+
+        // Check if the user has reacted to the post
+        const { data: existingReaction, error: fetchError } = await supabase
+            .from("post_reactions")
+            .select("id")
+            .eq("post_id", postId)
+            .eq("user_id", userId)
+            .single();
+
+        if (fetchError || !existingReaction) {
+            return res.status(404).json({ error: "Reaction not found" });
+        }
+
+        // Delete the reaction
+        const { error: deleteError } = await supabase
+            .from("post_reactions")
+            .delete()
+            .eq("id", existingReaction.id);
+
+        if (deleteError) {
+            return res.status(500).json({ error: "Failed to remove reaction" });
+        }
+
+        return res.status(200).json({ message: "Reaction removed successfully" });
+
+    } catch (error) {
+        console.error("Remove reaction error:", error);
+        return res.status(500).json({ error: "Failed to remove reaction", details: error.message });
+    }
+});
+
 export default router;

@@ -25,6 +25,11 @@ import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
+import {getReactions, addReaction, removeReaction} from '../services/reactionService';
+import {userAuth} from '../hooks/userAuth';
+
+const [reactions, setReactions] = useState();
+const {token} = userAuth();
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -95,6 +100,14 @@ function Feed() {
                 throw new Error('Invalid response format');
             }
 
+            //Fetch reactions for each post
+            const reactionsDAta = {};
+            await Promise.all(response.posts.map(async (post) => {
+                const reactionCounts = await getReactions(post.id);
+                reactionsData[post.id] = reactionCounts;
+            }));
+            
+            setReactions((prev) => ({...prev, ...reactionsData}));
             setPosts(prev => page === 1 ? response.posts : [...prev, ...response.posts]);
             setHasMore(response.pagination.hasMore);
         } catch (error) {
@@ -151,6 +164,54 @@ function Feed() {
 
     const handlePostClick = (postId) => {
         navigate(`/posts/${postId}`, { state: { from: location.pathname } });
+    };
+
+    //Function to Handle Voting Actions
+    const handleReaction = async (postId, type) => {
+        if (!token) {
+            toast({ 
+                title: 'Please log in to react',
+                description: 'You need to be logged in to react to posts',
+                status: 'error',
+                duration: 5000,
+                isClosable: true
+            });
+            return;
+        }
+
+        try {
+            if (reactions[postId]?.userReaction === type) {
+                await removeReaction(postId, token);
+                setReactions((prev) => ({
+                    ...prev,
+                    [postId]: {
+                        upvote: type === 'upvote' ? prev[postId].upvote - 1 : prev[postId].upvote,
+                        downvote: type === 'downvote' ? prev[postId].downvote - 1 : prev[postId].downvote,
+                        userReaction: null
+                    }
+                }));
+            } else {
+                //Add new reaction
+                await addReaction(postId, type, token);
+                setReactions((prev) => ({
+                    ...prev,
+                    [postId]: {
+                        upvote: type === 'upvote' ? prev[postId].upvote + 1 : prev[postId].upvote,
+                        downvote: type === 'downvote' ? prev[postId].downvote + 1 : prev[postId].downvote,
+                        userReaction: type
+                    }
+                }));  
+            }
+        }catch (error) {
+            console.error('Reaction error:', error);
+            toast({
+                title: 'Error adding reaction',
+                description: error.message,
+                status: 'error',
+                duration: 5000,
+                isClosable: true
+            });
+        }
     };
 
     return (
@@ -283,13 +344,13 @@ function Feed() {
                                 </Text>
 
                                 <HStack spacing={6} color="gray.600">
-                                    <HStack spacing={2}>
-                                        <Icon as={BiUpvote} boxSize={5} />
-                                        <Text>0</Text>
+                                    <HStack spacing={2} onClick={() => handleReaction(post.id, 'upvote')}>
+                                        <Icon as={BiUpvote} boxSize={5} color={reactions[post.id]?.userReaction === "upvote" ? "green.500" : "gray.600"} cursor={pointer} />
+                                        <Text>{reactions[post.id]?.upvote || 0}</Text>
                                     </HStack>
-                                    <HStack spacing={2}>
-                                        <Icon as={BiDownvote} boxSize={5} />
-                                        <Text>0</Text>
+                                    <HStack spacing={2} onClick={() => handleReaction(post.id, 'downvote')}>
+                                        <Icon as={BiDownvote} boxSize={5} color={reactions[post.id]?.userReaction === "downvote" ? "red.500" : "gray.600"} cursor={pointer} />
+                                        <Text>{reactions[post.id]?.downvote || 0}</Text>
                                     </HStack>
                                     <HStack spacing={2}>
                                         <Icon as={BiComment} boxSize={5} />
