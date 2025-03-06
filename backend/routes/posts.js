@@ -523,33 +523,50 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
 //Get reactions count for a post
 router.get("/reactions/:postId", async (req, res) => {
     try {
-        const { postId } = req.params;
+      const { postId } = req.params;
 
-        const { data: reactions, error } = await supabase
-            .from('post_reactions')
-            .select('type, count')
-            .eq('post_id', postId)
-            .group('type');
+      const { data, error } = await supabase
+        .from('post_reactions')
+        .select('upvote_count, downvote_count')
+        .eq('post_id', postId)
+  
+/*         console.log("Supabase error =>", error);
+        console.log("Supabase data =>", data); */
 
-        if (error || !reactions) {
-            return res.status(404).json({error: "Reactions not found for this post"});
-        }
+      if (error) {
+        return res.status(500).json({ 
+          error: "Failed to fetch reactions", 
+          details: error.message 
+        });
+      }
 
-        const reactionCounts = reactions.reduce((counts, reaction) => {
-            counts[reaction.type] = reaction.count;
-            return counts;
-        }, {});
-
-        return res.status(200).json({ reactions: reactionCounts });
-
-        } catch (error) {
-            console.error('Get reactions error:', error);
-            return res.status(500).json({
-                error: "Failed to fetch reactions",
-                details: error.message
+        if (!data || data.length === 0) {
+            return res.status(200).json({ 
+            reactions: { upvote: 0, downvote: 0 }
             });
         }
-    });
+
+        const totalUpvotes = data.reduce((sum, row) => sum + (row.upvote_count || 0), 0);
+        const totalDownvotes = data.reduce((sum, row) => sum + (row.downvote_count || 0), 0);
+/*         console.log("Post ID =>", postId);
+        console.log("Total upvotes =>", totalUpvotes);
+        console.log("Total downvotes =>", totalDownvotes); */
+
+      return res.status(200).json({
+        reactions: {
+          upvote: totalUpvotes || 0,
+          downvote: totalDownvotes || 0
+        }
+      });
+  
+    } catch (error) {
+      console.error('Get reactions error:', error);
+      return res.status(500).json({
+        error: "Failed to fetch reactions",
+        details: error.message
+      });
+    }
+  });  
 
 // Add or update reaction to a post
 router.post("/reactions", verifyToken, async (req, res) => {

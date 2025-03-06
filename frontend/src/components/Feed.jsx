@@ -26,10 +26,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
 import {getReactions, addReaction, removeReaction} from '../services/reactionService';
-import {userAuth} from '../hooks/userAuth';
-
-const [reactions, setReactions] = useState();
-const {token} = userAuth();
+import useAuthState from "../hooks/useAuthState";
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -48,7 +45,8 @@ function Feed() {
     const [selectedCategories, setSelectedCategories] = useState([]);
     const toast = useToast();
     const { ref, inView } = useInView();
-
+    const { user, token, isAuthenticated } = useAuthState();
+    const [reactions, setReactions] = useState();
     // Load categories
     useEffect(() => {
         const fetchCategories = async () => {
@@ -101,8 +99,10 @@ function Feed() {
             }
 
             //Fetch reactions for each post
-            const reactionsDAta = {};
+            const reactionsData = {};
+            //console.log("Posts received", response.posts)
             await Promise.all(response.posts.map(async (post) => {
+                //console.log("Calling getReactions for post", post.id);
                 const reactionCounts = await getReactions(post.id);
                 reactionsData[post.id] = reactionCounts;
             }));
@@ -170,11 +170,10 @@ function Feed() {
     const handleReaction = async (postId, type) => {
         if (!token) {
             toast({ 
-                title: 'Please log in to react',
-                description: 'You need to be logged in to react to posts',
-                status: 'error',
-                duration: 5000,
-                isClosable: true
+                title: 'Authentication required',
+                description: 'Please log in to react to posts.',
+                status: 'warning',
+                duration: 3000,
             });
             return;
         }
@@ -282,11 +281,11 @@ function Feed() {
                         bg="white"
                         border="2px solid black"
                         boxShadow="6px 6px 0 black"
-                        _hover={{
+                        /*_hover={{
                             boxShadow: "8px 8px 0 black",
                             cursor: "pointer"
                         }}
-                        onClick={() => handlePostClick(post.id)}
+                        onClick={() => handlePostClick(post.id)}*/
                         position="relative"
                     >
                         <Box p={6}>
@@ -345,11 +344,11 @@ function Feed() {
 
                                 <HStack spacing={6} color="gray.600">
                                     <HStack spacing={2} onClick={() => handleReaction(post.id, 'upvote')}>
-                                        <Icon as={BiUpvote} boxSize={5} color={reactions[post.id]?.userReaction === "upvote" ? "green.500" : "gray.600"} cursor={pointer} />
+                                        <Icon as={BiUpvote} boxSize={5} color={reactions[post.id]?.userReaction === "upvote" ? "green.500" : "gray.600"} cursor="pointer" />
                                         <Text>{reactions[post.id]?.upvote || 0}</Text>
                                     </HStack>
                                     <HStack spacing={2} onClick={() => handleReaction(post.id, 'downvote')}>
-                                        <Icon as={BiDownvote} boxSize={5} color={reactions[post.id]?.userReaction === "downvote" ? "red.500" : "gray.600"} cursor={pointer} />
+                                        <Icon as={BiDownvote} boxSize={5} color={reactions[post.id]?.userReaction === "downvote" ? "red.500" : "gray.600"} cursor="pointer"/>
                                         <Text>{reactions[post.id]?.downvote || 0}</Text>
                                     </HStack>
                                     <HStack spacing={2}>

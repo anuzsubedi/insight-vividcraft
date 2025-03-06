@@ -1,10 +1,15 @@
 import axios from "axios";
-import { ENDPOINTS } from "./endpoints";
+import { ENDPOINTS } from '../api/endpoints';
+
+const reactionAxios = axios.create({
+    baseURL: "http://localhost:5000", // Ajusta según tu backend
+    //withCredentials: true // si lo necesitas
+  });
 
 // Fetch reactions count for a post
 export const getReactions = async (postId) => {
     try {
-        const response = await axios.get(ENDPOINTS.REACTIONS.GET(postId));
+        const response = await reactionAxios.get(ENDPOINTS.REACTIONS.GET(postId));
         return response.data.reactions; // Returns { upvote: X, downvote: Y }
     } catch (error) {
         console.error("Error fetching reactions:", error);
