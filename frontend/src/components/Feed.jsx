@@ -168,6 +168,8 @@ function Feed() {
 
     //Function to Handle Voting Actions
     const handleReaction = async (postId, type) => {
+        const token = localStorage.getItem("token");
+        //console.log("PostID: ", postId); 
         if (!token) {
             toast({ 
                 title: 'Authentication required',
@@ -179,7 +181,8 @@ function Feed() {
         }
 
         try {
-            if (reactions[postId]?.userReaction === type) {
+            const currentReaction = reactions[postId]?.userReaction;
+            if (currentReaction === type){
                 await removeReaction(postId, token);
                 setReactions((prev) => ({
                     ...prev,
@@ -189,19 +192,26 @@ function Feed() {
                         userReaction: null
                     }
                 }));
-            } else {
-                //Add new reaction
-                await addReaction(postId, type, token);
-                setReactions((prev) => ({
-                    ...prev,
-                    [postId]: {
-                        upvote: type === 'upvote' ? prev[postId].upvote + 1 : prev[postId].upvote,
-                        downvote: type === 'downvote' ? prev[postId].downvote + 1 : prev[postId].downvote,
-                        userReaction: type
-                    }
-                }));  
+                return;
             }
-        }catch (error) {
+
+             if (currentReaction){
+                await removeReaction(postId, token);
+                return;
+            }
+
+            await addReaction(postId, type, token);
+
+            setReactions((prev) => ({
+                ...prev,
+                [postId]: {
+                    upvote: type === 'upvote' ? prev[postId].upvote + 1 : prev[postId].upvote,
+                    downvote: type === 'downvote' ? prev[postId].downvote + 1 : prev[postId].downvote,
+                    userReaction: type
+                }
+            }));
+            return;  
+        } catch (error) {
             console.error('Reaction error:', error);
             toast({
                 title: 'Error adding reaction',

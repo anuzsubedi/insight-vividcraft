@@ -577,7 +577,7 @@ router.post("/reactions", verifyToken, async (req, res) => {
         if (!postId || !type) {
             return res.status(400).json({ error: "Missing required fields" });
         }
-
+        // Check if the user has already reacted to the post
         const { data: existingReaction, error: fetchError } = await supabase
             .from('post_reactions')
             .select('*')
@@ -585,40 +585,44 @@ router.post("/reactions", verifyToken, async (req, res) => {
             .eq('user_id', userId)
             .single();
 
-        if (fetchError) {
-            return res.status(500).json({ error: "Failed to add reaction" });
+        if (fetchError && fetchError.code !== "PGRST116") {//PGRST116 is the code for no data found
+            return res.status(500).json({ error: "Failed to check existing reaction" });
+        }
+        // If the user has already reacted to the post, update the reaction
+        if (existingReaction && (
+            (type === "upvote" && existingReaction.upvote_count === 1) ||
+            (type === "downvote" && existingReaction.downvote_count === 1)
+        )) {
+            await supabase
+                .from("post_reactions")
+                .delete()
+                .eq("id", existingReaction.id);
+
+            return res.status(200).json({ message: "Reaction removed successfully" });
         }
 
+        // Update the reaction
         if (existingReaction) {
-            if (existingReaction.type === type) {
-                return res.status(400).json({ message: "Reaction already exists", reaction: existingReaction });
-            }
-
-            const { error: updateError } = await supabase
+            await supabase
                 .from('post_reactions')
-                .update({ type })
-                .eq('post_id', postId)
-                .eq('user_id', userId);
-                
-            if (updateError) {
-                return res.status(500).json({ error: "Failed to updating reaction" });
-            }
+                .update({ 
+                    upvote_count: type === "upvote" ? 1 : 0,
+                    downvote_count: type === "downvote" ? 1 : 0,
+                })
+                .eq('id', existingReaction.id);
 
             return res.status(200).json({ message: "Reaction updated successfully" });
         }
 
-        const { data: reaction, error: insertError } = await supabase
+        // Add a new reaction
+        await supabase
             .from('post_reactions')
             .insert({
                 post_id: postId, 
                 user_id: userId,
-                type
+                upvote_count: type === "upvote" ? 1 : 0,
+                downvote_count: type === "downvote" ? 1 : 0,
             })
-            .single();
-
-        if (insertError) {
-            return res.status(500).json({ error: "Failed to add reaction" });
-        }
 
         return res.status(201).json({ message: "Reaction added successfully", reaction });     
     } catch (error) {
@@ -636,28 +640,31 @@ router.delete("/reactions", verifyToken, async (req, res) => {
         if (!postId) {
             return res.status(400).json({ error: "Missing postId" });
         }
+        // Delete the reaction
+        const { error: deleteError } = await supabase
+            .from("post_reactions")
+            .delete()
+            .eq("post_id", postId)
+            .eq("user_id", userId)
 
-        // Check if the user has reacted to the post
+        if (deleteError) {
+            return res.status(500).json({ error: "Failed to remove reaction" });
+        }
+
+        if(count === 0){
+            return res.status(404).json({ error: "Reaction not found" });
+        }
+/*         // Check if the user has reacted to the post
         const { data: existingReaction, error: fetchError } = await supabase
             .from("post_reactions")
             .select("id")
             .eq("post_id", postId)
             .eq("user_id", userId)
-            .single();
+            //.single();
 
         if (fetchError || !existingReaction) {
             return res.status(404).json({ error: "Reaction not found" });
-        }
-
-        // Delete the reaction
-        const { error: deleteError } = await supabase
-            .from("post_reactions")
-            .delete()
-            .eq("id", existingReaction.id);
-
-        if (deleteError) {
-            return res.status(500).json({ error: "Failed to remove reaction" });
-        }
+        } */
 
         return res.status(200).json({ message: "Reaction removed successfully" });
 

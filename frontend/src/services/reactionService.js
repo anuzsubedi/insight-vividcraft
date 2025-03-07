@@ -1,9 +1,9 @@
 import axios from "axios";
 import { ENDPOINTS } from '../api/endpoints';
+import { data } from "react-router-dom";
 
 const reactionAxios = axios.create({
-    baseURL: "http://localhost:5000", // Ajusta según tu backend
-    //withCredentials: true // si lo necesitas
+    baseURL: "http://localhost:5000", // API server
   });
 
 // Fetch reactions count for a post
@@ -19,8 +19,13 @@ export const getReactions = async (postId) => {
 
 // Add or update a reaction (upvote/downvote)
 export const addReaction = async (postId, type, token) => {
+    if(!token) {
+        console.error("No token provided to add reaction");
+        throw new Error("No token provided to add reaction");
+    }
+
     try {
-        const response = await axios.post(
+        const response = await reactionAxios.post(
             ENDPOINTS.REACTIONS.ADD,
             { postId, type }, // type can be "upvote" or "downvote"
             { headers: { Authorization: `Bearer ${token}` } }
@@ -34,12 +39,16 @@ export const addReaction = async (postId, type, token) => {
 
 // Remove a reaction
 export const removeReaction = async (postId, token) => {
+    if(!token) {
+        console.error("No token provided to add reaction");
+        throw new Error("No token provided to add reaction");
+    }
+
     try {
-        const response = await axios.delete(
+        const response = await reactionAxios.delete(
             ENDPOINTS.REACTIONS.REMOVE,
-            {
-                data: { postId }, // Send postId in request body
-                headers: { Authorization: `Bearer ${token}` }
+                {headers: { Authorization: `Bearer ${token}` },
+                 data: { postId }
             }
         );
         return response.data;
