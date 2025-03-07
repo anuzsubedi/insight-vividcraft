@@ -185,22 +185,36 @@ function Feed() {
             
             // Case 1: Clicking the same reaction type (toggle off)
             if (currentReaction === type) {
-                await removeReaction(postId, token);
-                setReactions((prev) => ({
-                    ...prev,
-                    [postId]: {
-                        upvote: type === 'upvote' ? Math.max(0, prev[postId].upvote - 1) : prev[postId].upvote,
-                        downvote: type === 'downvote' ? Math.max(0, prev[postId].downvote - 1) : prev[postId].downvote,
-                        userReaction: null
-                    }
-                }));
+                try {
+                    await removeReaction(postId, token);
+                    setReactions((prev) => ({
+                        ...prev,
+                        [postId]: {
+                            upvote: type === 'upvote' ? Math.max(0, prev[postId].upvote - 1) : prev[postId].upvote,
+                            downvote: type === 'downvote' ? Math.max(0, prev[postId].downvote - 1) : prev[postId].downvote,
+                            userReaction: null
+                        }
+                    }));
+                } catch (error) {
+                    // If removal fails, refresh the reactions to get current state
+                    const updatedReactions = await getReactions(postId);
+                    setReactions((prev) => ({
+                        ...prev,
+                        [postId]: updatedReactions
+                    }));
+                }
                 return;
             }
 
             // Case 2: Switching from one reaction to another
             if (currentReaction) {
-                await removeReaction(postId, token);
-                // First update state to remove previous reaction
+                try {
+                    await removeReaction(postId, token);
+                } catch (error) {
+                    // If removal fails, continue with adding new reaction
+                    console.warn('Failed to remove previous reaction:', error);
+                }
+                
                 setReactions((prev) => ({
                     ...prev,
                     [postId]: {
@@ -224,9 +238,20 @@ function Feed() {
 
         } catch (error) {
             console.error('Reaction error:', error);
+            // Refresh reactions to ensure UI shows correct state
+            try {
+                const updatedReactions = await getReactions(postId);
+                setReactions((prev) => ({
+                    ...prev,
+                    [postId]: updatedReactions
+                }));
+            } catch (refreshError) {
+                console.error('Failed to refresh reactions:', refreshError);
+            }
+            
             toast({
-                title: 'Error adding reaction',
-                description: error.message,
+                title: 'Error updating reaction',
+                description: 'Failed to update your reaction. Please try again.',
                 status: 'error',
                 duration: 5000,
                 isClosable: true

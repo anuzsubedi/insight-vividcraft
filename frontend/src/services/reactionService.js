@@ -39,21 +39,20 @@ export const addReaction = async (postId, type, token) => {
 
 // Remove a reaction
 export const removeReaction = async (postId, token) => {
-    if(!token) {
-        console.error("No token provided to add reaction");
-        throw new Error("No token provided to add reaction");
-    }
-
     try {
-        const response = await reactionAxios.delete(
-            ENDPOINTS.REACTIONS.REMOVE,
-                {headers: { Authorization: `Bearer ${token}` },
-                 data: { postId }
+        const response = await axios.delete(`${API_URL}/posts/${postId}/reactions`, {
+            headers: {
+                Authorization: `Bearer ${token}`
             }
-        );
+        });
         return response.data;
     } catch (error) {
-        console.error("Error removing reaction:", error);
+        // Add better error handling
+        if (error.response?.status === 404) {
+            console.log('No reaction found to remove');
+            // Don't throw error if reaction doesn't exist
+            return null;
+        }
         throw error;
     }
 };
