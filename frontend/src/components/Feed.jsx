@@ -169,7 +169,7 @@ function Feed() {
     //Function to Handle Voting Actions
     const handleReaction = async (postId, type) => {
         const token = localStorage.getItem("token");
-        //console.log("PostID: ", postId); 
+        
         if (!token) {
             toast({ 
                 title: 'Authentication required',
@@ -182,26 +182,37 @@ function Feed() {
 
         try {
             const currentReaction = reactions[postId]?.userReaction;
-            if (currentReaction === type){
+            
+            // Case 1: Clicking the same reaction type (toggle off)
+            if (currentReaction === type) {
                 await removeReaction(postId, token);
                 setReactions((prev) => ({
                     ...prev,
                     [postId]: {
-                        upvote: type === 'upvote' ? prev[postId].upvote - 1 : prev[postId].upvote,
-                        downvote: type === 'downvote' ? prev[postId].downvote - 1 : prev[postId].downvote,
+                        upvote: type === 'upvote' ? Math.max(0, prev[postId].upvote - 1) : prev[postId].upvote,
+                        downvote: type === 'downvote' ? Math.max(0, prev[postId].downvote - 1) : prev[postId].downvote,
                         userReaction: null
                     }
                 }));
                 return;
             }
 
-             if (currentReaction){
+            // Case 2: Switching from one reaction to another
+            if (currentReaction) {
                 await removeReaction(postId, token);
-                return;
+                // First update state to remove previous reaction
+                setReactions((prev) => ({
+                    ...prev,
+                    [postId]: {
+                        upvote: currentReaction === 'upvote' ? Math.max(0, prev[postId].upvote - 1) : prev[postId].upvote,
+                        downvote: currentReaction === 'downvote' ? Math.max(0, prev[postId].downvote - 1) : prev[postId].downvote,
+                        userReaction: null
+                    }
+                }));
             }
 
+            // Add new reaction
             await addReaction(postId, type, token);
-
             setReactions((prev) => ({
                 ...prev,
                 [postId]: {
@@ -210,7 +221,7 @@ function Feed() {
                     userReaction: type
                 }
             }));
-            return;  
+
         } catch (error) {
             console.error('Reaction error:', error);
             toast({
