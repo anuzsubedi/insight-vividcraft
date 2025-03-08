@@ -7,6 +7,7 @@ import socialRoutes from "./routes/social.js";
 import postRoutes from "./routes/posts.js";
 import categoriesRoutes from "./routes/categories.js";
 import feedRoutes from "./routes/feed.js";
+import searchRoutes from "./routes/search.js";
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +28,7 @@ app.use("/api/social", socialRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/feed", feedRoutes);
+app.use("/api/search", searchRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({

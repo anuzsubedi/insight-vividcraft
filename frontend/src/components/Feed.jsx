@@ -27,6 +27,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
 import {getReactions, addReaction, removeReaction} from '../services/reactionService';
 import useAuthState from "../hooks/useAuthState";
+import SearchBar from './SearchBar';
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -261,10 +262,8 @@ function Feed() {
 
     return (
         <VStack spacing={6} align="stretch">
-            {/* Create Post Form */}
             <CreatePost categories={categories} onPostCreated={handlePostCreated} />
 
-            {/* Feed Type Selector */}
             <HStack spacing={4}>
                 <ChakraSelect
                     value={feedType}
@@ -318,8 +317,7 @@ function Feed() {
                     </Menu>
                 )}
             </HStack>
-
-            {/* Posts */}
+            
             <VStack spacing={6} align="stretch">
                 {posts.map((post) => (
                     <Box
