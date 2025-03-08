@@ -1,22 +1,27 @@
 import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
-import authMiddleware from '../middleware/authMiddleware.js';
+import verifyToken from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
         const { query } = req.query;
-        const isUserSearch = query.startsWith('@');
+        console.log('Search query:', query); // Debug log
+        
+        if (!query) {
+            return res.status(400).json({ error: 'Search query is required' });
+        }
 
-        if (isUserSearch) {
-            const searchQuery = query.substring(1);
+        // If searching for users (query starts with @)
+        if (query.startsWith('@')) {
+            const searchQuery = query.substring(1).toLowerCase();
             const { data: users, error } = await supabase
                 .from('users')
                 .select('username, display_name, avatar_name')
-                .ilike('username', `%${searchQuery}%`)
-                .limit(10);
+                .ilike('username', `%${searchQuery}%`);
 
+            console.log('Users result:', users); // Debug log
             if (error) throw error;
             return res.json({ users });
         }
@@ -33,8 +38,7 @@ router.get('/', authMiddleware, async (req, res) => {
                     author:user_id (username, avatar_name)
                 `)
                 .ilike('body', `%${query}%`)
-                .eq('type', 'post')
-                .limit(5),
+                .eq('type', 'post'),
 
             supabase
                 .from('posts')
@@ -47,10 +51,11 @@ router.get('/', authMiddleware, async (req, res) => {
                     author:user_id (username, avatar_name),
                     category:category_id (id, name)
                 `)
-                .or(`title.ilike.%${query}%, body.ilike.%${query}%`)
                 .eq('type', 'article')
-                .limit(5)
+                .or(`title.ilike.%${query}%,body.ilike.%${query}%`)
         ]);
+
+        console.log('Search results:', { posts: postsResult.data, articles: articlesResult.data }); // Debug log
 
         if (postsResult.error) throw postsResult.error;
         if (articlesResult.error) throw articlesResult.error;
@@ -59,6 +64,7 @@ router.get('/', authMiddleware, async (req, res) => {
             posts: postsResult.data || [],
             articles: articlesResult.data || []
         });
+
     } catch (error) {
         console.error('Search error:', error);
         res.status(500).json({ error: 'Search failed' });

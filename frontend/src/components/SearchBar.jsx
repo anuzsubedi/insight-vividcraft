@@ -11,6 +11,7 @@ import {
     HStack,
     useToast,
     Spinner,
+    Divider,
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
 import { useNavigate } from 'react-router-dom';
@@ -28,10 +29,9 @@ function SearchBar() {
     const toast = useToast();
     const searchRef = useRef();
 
-    // Debounced search function
     const debouncedSearch = useRef(
         debounce(async (searchQuery) => {
-            if (!searchQuery.trim()) {
+            if (!searchQuery.trim() || !token) {
                 setResults(null);
                 return;
             }
@@ -39,14 +39,17 @@ function SearchBar() {
             setIsLoading(true);
             try {
                 const searchResults = await searchBarService.searchContent(searchQuery, token);
+                console.log('Search results:', searchResults); // Debug log
                 setResults(searchResults);
             } catch (error) {
+                console.error('Search error:', error);
                 toast({
                     title: 'Search failed',
                     description: error.message,
                     status: 'error',
                     duration: 3000,
                 });
+                setResults(null);
             } finally {
                 setIsLoading(false);
             }
@@ -55,9 +58,8 @@ function SearchBar() {
 
     useEffect(() => {
         debouncedSearch(query);
-    }, [query, debouncedSearch]);
+    }, [query]);
 
-    // Handle clicks outside of search results
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (searchRef.current && !searchRef.current.contains(event.target)) {
@@ -68,6 +70,20 @@ function SearchBar() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const handleItemClick = (type, item) => {
+        switch (type) {
+            case 'user':
+                navigate(`/user/${item.username}`);
+                break;
+            case 'post':
+            case 'article':
+                navigate(`/posts/${item.id}`);
+                break;
+        }
+        setQuery('');
+        setShowResults(false);
+    };
 
     return (
         <Box position="relative" width="100%" maxW="600px" ref={searchRef}>
@@ -94,7 +110,7 @@ function SearchBar() {
                 </InputRightElement>
             </InputGroup>
 
-            {showResults && results && (
+            {showResults && query.trim() !== '' && (
                 <Box
                     position="absolute"
                     top="100%"
@@ -103,75 +119,95 @@ function SearchBar() {
                     bg="white"
                     border="2px solid black"
                     boxShadow="6px 6px 0 black"
-                    zIndex="dropdown"
+                    zIndex={1000}
                     maxH="400px"
                     overflowY="auto"
                     mt={2}
                 >
                     <VStack align="stretch" spacing={0}>
-                        {results.type === 'users' ? (
-                            results.results.map(user => (
-                                <Box
-                                    key={user.username}
-                                    p={3}
-                                    _hover={{ bg: 'gray.50' }}
-                                    cursor="pointer"
-                                    onClick={() => {
-                                        navigate(`/user/${user.username}`);
-                                        setShowResults(false);
-                                        setQuery('');
-                                    }}
-                                    borderBottom="1px solid"
-                                    borderColor="gray.200"
-                                >
-                                    <HStack>
-                                        <Avatar size="sm" name={user.displayName} src={user.avatarUrl} />
-                                        <VStack align="start" spacing={0}>
-                                            <Text fontWeight="bold">{user.displayName}</Text>
-                                            <Text fontSize="sm" color="gray.500">@{user.username}</Text>
-                                        </VStack>
-                                    </HStack>
-                                </Box>
-                            ))
-                        ) : (
+                        {/* Users Section */}
+                        {results?.users?.length > 0 && (
                             <>
-                                {results.results.posts.map(post => (
+                                <Box p={2} bg="gray.50">
+                                    <Text fontWeight="bold" fontSize="sm">Users</Text>
+                                </Box>
+                                {results.users.map(user => (
+                                    <Box
+                                        key={user.username}
+                                        p={3}
+                                        _hover={{ bg: 'gray.50' }}
+                                        cursor="pointer"
+                                        onClick={() => handleItemClick('user', user)}
+                                    >
+                                        <HStack>
+                                            <Avatar
+                                                size="sm"
+                                                name={user.display_name}
+                                                src={user.avatar_name ? `/avatars/${user.avatar_name}` : undefined}
+                                            />
+                                            <VStack align="start" spacing={0}>
+                                                <Text fontWeight="bold">{user.display_name}</Text>
+                                                <Text fontSize="sm" color="gray.500">@{user.username}</Text>
+                                            </VStack>
+                                        </HStack>
+                                    </Box>
+                                ))}
+                                {(results?.posts?.length > 0 || results?.articles?.length > 0) && <Divider />}
+                            </>
+                        )}
+
+                        {/* Posts Section */}
+                        {results?.posts?.length > 0 && (
+                            <>
+                                <Box p={2} bg="gray.50">
+                                    <Text fontWeight="bold" fontSize="sm">Posts</Text>
+                                </Box>
+                                {results.posts.map(post => (
                                     <Box
                                         key={post.id}
                                         p={3}
                                         _hover={{ bg: 'gray.50' }}
                                         cursor="pointer"
-                                        onClick={() => {
-                                            navigate(`/posts/${post.id}`);
-                                            setShowResults(false);
-                                            setQuery('');
-                                        }}
-                                        borderBottom="1px solid"
-                                        borderColor="gray.200"
+                                        onClick={() => handleItemClick('post', post)}
                                     >
-                                        <Text fontSize="sm" color="gray.500">Post</Text>
+                                        <Text fontSize="sm" color="gray.500">@{post.author.username}</Text>
                                         <Text noOfLines={2}>{post.body}</Text>
                                     </Box>
                                 ))}
-                                {results.results.articles.map(article => (
+                                {results?.articles?.length > 0 && <Divider />}
+                            </>
+                        )}
+
+                        {/* Articles Section */}
+                        {results?.articles?.length > 0 && (
+                            <>
+                                <Box p={2} bg="gray.50">
+                                    <Text fontWeight="bold" fontSize="sm">Articles</Text>
+                                </Box>
+                                {results.articles.map(article => (
                                     <Box
                                         key={article.id}
                                         p={3}
                                         _hover={{ bg: 'gray.50' }}
                                         cursor="pointer"
-                                        onClick={() => {
-                                            navigate(`/posts/${article.id}`);
-                                            setShowResults(false);
-                                            setQuery('');
-                                        }}
-                                        borderBottom="1px solid"
-                                        borderColor="gray.200"
+                                        onClick={() => handleItemClick('article', article)}
                                     >
-                                        <Text fontSize="sm" color="gray.500">Article</Text>
+                                        <Text fontSize="sm" color="gray.500">@{article.author.username}</Text>
                                         <Text fontWeight="bold">{article.title}</Text>
                                     </Box>
                                 ))}
                             </>
+                        )}
+
+                        {/* No Results Message */}
+                        {!isLoading && (!results || (
+                            !results.users?.length &&
+                            !results.posts?.length &&
+                            !results.articles?.length
+                        )) && (
+                            <Box p={4} textAlign="center">
+                                <Text color="gray.500">No results found</Text>
+                            </Box>
                         )}
                     </VStack>
                 </Box>
