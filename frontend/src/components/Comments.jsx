@@ -168,7 +168,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
               <IconButton
                 icon={userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
                 variant="ghost"
-                size="sm"
+               
                 color={userReaction === 'upvote' ? "blue.500" : "gray.600"}
                 aria-label="Upvote"
                 onClick={() => handleReaction('upvote')}
@@ -180,7 +180,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
                       getNetScore(reactions.upvotes, reactions.downvotes) < 0 ? "red.500" : "gray.600"}
                 fontWeight="semibold"
                 transition="all 0.2s"
-                transform={isAnimating ? 'scale(1.2)' : 'scale(1)'}
+                transform={isAnimating ? 'scale(1.02)' : 'scale(1)'}
               >
                 {getNetScore(reactions.upvotes, reactions.downvotes)}
               </Text>
