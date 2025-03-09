@@ -15,34 +15,26 @@ export const verifyToken = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-        // console.log('Verifying token:', token.substring(0, 20) + '...');
-
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // console.log('Decoded token:', decoded);
-
-        // Verify user exists in database
+        
+        // Verify user exists and is active in database
         const { data: user, error } = await supabase
             .from('users')
             .select('id, username, email')
             .eq('id', decoded.userId)
             .single();
 
-        if (error) {
-            console.error('Supabase user lookup error:', error);
-            return res.status(500).json({ error: 'Database error during authentication' });
-        }
-
-        if (!user) {
-            return res.status(401).json({ error: 'User not found' });
+        if (error || !user) {
+            console.error('User verification error:', error || 'User not found');
+            return res.status(401).json({ error: 'User not found or inactive' });
         }
 
         req.user = {
-            userId: user.id,
+            userId: user.id, // Use the ID from database, not from token
             username: user.username,
             email: user.email
         };
 
-        // console.log('Auth successful for user:', user.username);
         next();
     } catch (error) {
         console.error('Token verification error:', error);
