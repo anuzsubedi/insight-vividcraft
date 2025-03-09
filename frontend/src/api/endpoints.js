@@ -48,5 +48,11 @@ export const ENDPOINTS = {
         FOLLOWING: '/api/feed/following',
         NETWORK: '/api/feed/network', // Changed from EXTENDED
         EXPLORE: '/api/feed/explore',
+    },
+    COMMENTS: {
+        GET_POST_COMMENTS: (postId) => `api/comments/${postId}`,
+        CREATE_COMMENT: 'api/comments',
+        UPDATE_COMMENT: (id) => `api/comments/${id}`,
+        DELETE_COMMENT: (id) => `api/comments/${id}`,
     }
 };

@@ -14,6 +14,7 @@ import {
 } from "@chakra-ui/react";
 import { ChevronDownIcon } from "@chakra-ui/icons";
 import { postService } from "../services/postService";
+import Comments from '../components/Comments';
 
 function ViewPost() {
   const { id } = useParams();
@@ -160,6 +161,9 @@ function ViewPost() {
               {new Date(post.published_at).toLocaleDateString()}
             </Text>
           </HStack>
+          <Box mt={4}>
+            <Comments postId={post.id} />
+          </Box>
         </VStack>
       </Box>
     </Container>
