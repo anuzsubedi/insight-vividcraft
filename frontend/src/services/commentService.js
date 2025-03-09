@@ -71,9 +71,46 @@ const deleteComment = async (id) => {
   }
 };
 
+const addReaction = async (commentId, type) => {
+  try {
+    console.log('[commentService] Adding reaction:', { commentId, type });
+    const response = await api.post(`/api/comments/${commentId}/reactions`, { type });
+    console.log('[commentService] Reaction added:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[commentService] Error adding reaction:', {
+      commentId,
+      type,
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    throw error;
+  }
+};
+
+const getReactions = async (commentId) => {
+  try {
+    console.log('[commentService] Getting reactions:', commentId);
+    const response = await api.get(`/api/comments/${commentId}/reactions`);
+    console.log('[commentService] Reactions retrieved:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[commentService] Error getting reactions:', {
+      commentId,
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    throw error;
+  }
+};
+
 export const commentService = {
   getComments,
   createComment,
   updateComment,
-  deleteComment
+  deleteComment,
+  addReaction,
+  getReactions
 };

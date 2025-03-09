@@ -54,5 +54,7 @@ export const ENDPOINTS = {
         CREATE_COMMENT: 'api/comments',
         UPDATE_COMMENT: (id) => `api/comments/${id}`,
         DELETE_COMMENT: (id) => `api/comments/${id}`,
+        ADD_REACTION: (id) => `api/comments/${id}/reactions`,
+        GET_REACTIONS: (id) => `api/comments/${id}/reactions`,
     }
 };

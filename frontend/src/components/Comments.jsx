@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Box, Text, VStack, HStack, Input, Button, Avatar, IconButton, useToast, Divider } from '@chakra-ui/react';
 import { FiMoreHorizontal, FiMessageCircle } from 'react-icons/fi';
-import { AiOutlineHeart } from 'react-icons/ai';
+import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
 import { commentService } from '../services/commentService';
 import useAuthState from '../hooks/useAuthState';
 import PropTypes from 'prop-types';
@@ -12,6 +12,77 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
   const [editContent, setEditContent] = useState(comment.content);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [reactions, setReactions] = useState({ upvotes: 0, downvotes: 0 });
+  const [userReaction, setUserReaction] = useState(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    const loadReactions = async () => {
+      try {
+        const data = await commentService.getReactions(comment.id);
+        setReactions(data);
+      } catch (error) {
+        console.error('Error loading reactions:', error);
+      }
+    };
+    loadReactions();
+  }, [comment.id]);
+
+  const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
+
+  const handleReaction = async (type) => {
+    if (!user) {
+      toast({
+        title: 'Please login to react',
+        status: 'warning',
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Store previous state for rollback
+    const previousReactions = { ...reactions };
+    const previousUserReaction = userReaction;
+
+    // Optimistically update the UI
+    setIsAnimating(true);
+    const updatedReactions = { ...reactions };
+    
+    if (userReaction === type) {
+      // Removing reaction
+      updatedReactions[`${type}s`] -= 1;
+      setUserReaction(null);
+    } else {
+      // If there was a previous reaction, remove it
+      if (userReaction) {
+        updatedReactions[`${userReaction}s`] -= 1;
+      }
+      // Add new reaction
+      updatedReactions[`${type}s`] += 1;
+      setUserReaction(type);
+    }
+    
+    setReactions(updatedReactions);
+
+    try {
+      const result = await commentService.addReaction(comment.id, type);
+      setReactions(result);
+    } catch (error) {
+      // Revert on error
+      console.error('Error handling reaction:', error);
+      setReactions(previousReactions);
+      setUserReaction(previousUserReaction);
+      toast({
+        title: 'Error updating reaction',
+        description: error.message,
+        status: 'error',
+        duration: 3000,
+      });
+    } finally {
+      setTimeout(() => setIsAnimating(false), 300); // Animation duration
+    }
+  };
 
   const handleEdit = async () => {
     if (isEditing) {
@@ -93,15 +164,37 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
           )}
 
           <HStack spacing={6} mb={2}>
-            <Button
-              leftIcon={<AiOutlineHeart />}
-              variant="ghost"
-              size="sm"
-              color="gray.600"
-              fontWeight="normal"
-            >
-              0
-            </Button>
+            <HStack>
+              <IconButton
+                icon={userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                variant="ghost"
+                size="sm"
+                color={userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                aria-label="Upvote"
+                onClick={() => handleReaction('upvote')}
+                transition="transform 0.2s"
+                transform={isAnimating && userReaction === 'upvote' ? 'scale(1.2)' : 'scale(1)'}
+              />
+              <Text 
+                color={getNetScore(reactions.upvotes, reactions.downvotes) > 0 ? "blue.500" : 
+                      getNetScore(reactions.upvotes, reactions.downvotes) < 0 ? "red.500" : "gray.600"}
+                fontWeight="semibold"
+                transition="all 0.2s"
+                transform={isAnimating ? 'scale(1.2)' : 'scale(1)'}
+              >
+                {getNetScore(reactions.upvotes, reactions.downvotes)}
+              </Text>
+              <IconButton
+                icon={userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                variant="ghost"
+                size="sm"
+                color={userReaction === 'downvote' ? "red.500" : "gray.600"}
+                aria-label="Downvote"
+                onClick={() => handleReaction('downvote')}
+                transition="transform 0.2s"
+                transform={isAnimating && userReaction === 'downvote' ? 'scale(1.2)' : 'scale(1)'}
+              />
+            </HStack>
             <Button
               leftIcon={<FiMessageCircle />}
               variant="ghost"
