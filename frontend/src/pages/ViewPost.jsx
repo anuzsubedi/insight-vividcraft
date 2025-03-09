@@ -40,16 +40,16 @@ function ViewPost() {
           return;
         }
         
-        // Load reaction information
+        // Always fetch fresh reaction data
         try {
           const reactions = await postService.getReactions(id);
           setPost({
             ...response.post,
             reactions: {
-              upvotes: reactions.upvotes,
-              downvotes: reactions.downvotes
+              upvotes: reactions.upvotes || 0,
+              downvotes: reactions.downvotes || 0
             },
-            userReaction: reactions.userReaction
+            userReaction: user ? reactions.userReaction : null
           });
         } catch (error) {
           console.error('Error loading reactions:', error);
@@ -77,7 +77,7 @@ function ViewPost() {
     };
 
     loadPost();
-  }, [id, toast, navigate]);
+  }, [id, user, toast, navigate]);
 
   const handleReaction = async (type) => {
     if (!user) {
@@ -234,6 +234,8 @@ function ViewPost() {
               By{" "}
               <Link
                 to={`/user/${post.author.username}`}
+                color="paper.600"
+                fontWeight="bold"
                 style={{ textDecoration: "underline" }}
               >
                 {post.author.display_name}

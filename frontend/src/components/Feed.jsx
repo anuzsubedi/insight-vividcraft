@@ -37,44 +37,45 @@ const formatPostDate = (date) => {
 const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
 
 function Feed() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { user } = useAuthState();
-    const [feedType, setFeedType] = useState('following');
     const [posts, setPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [categories, setCategories] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
-    const toast = useToast();
+    const [feedType, setFeedType] = useState('following');
     const { ref, inView } = useInView();
+    const toast = useToast();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { user } = useAuthState();
 
-    // Load categories
+    // Load categories on mount
     useEffect(() => {
-        const fetchCategories = async () => {
+        const loadCategories = async () => {
             try {
-                const response = await categoryService.getCategories();
-                setCategories(response.categories || []);
+                const data = await categoryService.getCategories();
+                setCategories(data);
             } catch (error) {
-                toast({
-                    title: 'Error loading categories',
-                    description: error.message,
-                    status: 'error',
-                    duration: 3000,
-                });
+                console.error('Error loading categories:', error);
             }
         };
-        fetchCategories();
-    }, [toast]);
+        loadCategories();
+    }, []);
 
-    // Load feed posts
+    // Load posts
     const loadPosts = useCallback(async () => {
         if (isLoading || !hasMore) return;
+
         setIsLoading(true);
         try {
             let response;
-            const params = { page, limit: 10 };
+            const params = {
+                page,
+                limit: 10,
+                ...(selectedCategories.length ? { categories: selectedCategories.join(',') } : {})
+            };
+
             switch (feedType) {
                 case 'following':
                     response = await feedService.getFollowingFeed(params);
@@ -83,29 +84,24 @@ function Feed() {
                     response = await feedService.getNetworkFeed(params);
                     break;
                 case 'explore':
-                    if (selectedCategories.length > 0) {
-                        params.categories = selectedCategories.join(',');
-                    }
                     response = await feedService.getExploreFeed(params);
-                    if (response.categories) {
-                        setCategories(response.categories);
-                    }
                     break;
                 default:
-                    return;
-            }
-            if (!response || !response.posts) {
-                throw new Error('Invalid response format');
+                    throw new Error('Invalid feed type');
             }
 
-            // Load reactions for each post
+            // Add reactions to each post
             const postsWithReactions = await Promise.all(response.posts.map(async (post) => {
                 try {
+                    // Always fetch fresh reaction data for each post
                     const reactions = await postService.getReactions(post.id);
                     return {
                         ...post,
-                        reactions: reactions,
-                        userReaction: reactions.userReaction
+                        reactions: {
+                            upvotes: reactions.upvotes || 0,
+                            downvotes: reactions.downvotes || 0
+                        },
+                        userReaction: user ? reactions.userReaction : null
                     };
                 } catch (error) {
                     console.error('Error loading reactions for post:', post.id, error);
@@ -132,7 +128,7 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, page, selectedCategories, isLoading, hasMore, toast]);
+    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, user]);
 
     // Reset feed when type changes
     useEffect(() => {
@@ -304,8 +300,11 @@ function Feed() {
                         border="2px solid black"
                         boxShadow="6px 6px 0 black"
                         _hover={{
-                            boxShadow: "8px 8px 0 black",
+                            transform: "translate(-3px, -3px)",
+                            boxShadow: "9px 9px 0 black",
+                            cursor: "pointer"
                         }}
+                        transition="all 0.2s"
                         position="relative"
                     >
                         <Box p={6} onClick={() => handlePostClick(post.id)} cursor="pointer">
@@ -336,7 +335,6 @@ function Feed() {
                                                     {post.category.name}
                                                 </Badge>
                                             )}
-                                            
                                         </>
                                     )}
                                 </HStack>

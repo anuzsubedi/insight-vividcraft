@@ -4,13 +4,44 @@ import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+// Helper function to get reaction counts and user reaction
+async function getCommentReactions(commentId, userId) {
+  // Get reaction counts
+  const { data: counts, error: countsError } = await supabase
+    .rpc('get_comment_reaction_counts', { comment_id: commentId });
+
+  if (countsError) throw countsError;
+
+  // Get user's reaction if user is logged in
+  let userReaction = null;
+  if (userId) {
+    const { data: reaction } = await supabase
+      .from('comment_reactions')
+      .select('reaction_type')
+      .eq('user_id', userId)
+      .eq('comment_id', commentId)
+      .single();
+
+    if (reaction) {
+      userReaction = reaction.reaction_type;
+    }
+  }
+
+  return {
+    ...counts[0],
+    userReaction
+  };
+}
+
 // Get comments for a post
 router.get('/:postId', async (req, res) => {
   try {
     const { postId } = req.params;
+    const userId = req.user?.userId;
     console.log('[GET COMMENTS] Request for postId:', postId);
     
-    const { data, error } = await supabase
+    // Get comments
+    const { data: comments, error } = await supabase
       .from('comments')
       .select(`
         *,
@@ -19,15 +50,28 @@ router.get('/:postId', async (req, res) => {
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
+    if (error) throw error;
+
+    // Add reactions for each comment
+    const commentsWithReactions = await Promise.all(comments.map(async (comment) => {
+      const reactions = await getCommentReactions(comment.id, userId);
+      return {
+        ...comment,
+        reactions: {
+          upvotes: reactions.upvotes,
+          downvotes: reactions.downvotes
+        },
+        userReaction: reactions.userReaction
+      };
+    }));
+
     console.log('[GET COMMENTS] Query result:', { 
-      success: !error,
-      commentCount: data?.length || 0,
-      error: error?.message,
-      firstComment: data?.[0]
+      success: true,
+      commentCount: commentsWithReactions.length,
+      firstComment: commentsWithReactions[0]
     });
 
-    if (error) throw error;
-    res.json(data);
+    res.json(commentsWithReactions);
   } catch (error) {
     console.error('[GET COMMENTS] Error:', error);
     res.status(500).json({ error: error.message });
@@ -94,9 +138,16 @@ router.post('/', verifyToken, async (req, res) => {
       console.error('[CREATE COMMENT] Error:', error);
       throw error;
     }
+
+    // Add initial reaction state
+    const comment = {
+      ...data,
+      reactions: { upvotes: 0, downvotes: 0 },
+      userReaction: null
+    };
     
-    console.log('[CREATE COMMENT] Success:', data);
-    res.json(data);
+    console.log('[CREATE COMMENT] Success:', comment);
+    res.json(comment);
   } catch (error) {
     console.error('[CREATE COMMENT] Error:', error);
     res.status(500).json({ error: error.message });
@@ -122,7 +173,7 @@ router.put('/:id', verifyToken, async (req, res) => {
       return res.status(401).json({ error: "User not found or unauthorized" });
     }
 
-    const { data, error } = await supabase
+    const { data: comment, error } = await supabase
       .from('comments')
       .update({ content })
       .eq('id', id)
@@ -134,7 +185,19 @@ router.put('/:id', verifyToken, async (req, res) => {
       .single();
 
     if (error) throw error;
-    res.json(data);
+
+    // Get reactions for updated comment
+    const reactions = await getCommentReactions(id, userId);
+    const commentWithReactions = {
+      ...comment,
+      reactions: {
+        upvotes: reactions.upvotes,
+        downvotes: reactions.downvotes
+      },
+      userReaction: reactions.userReaction
+    };
+
+    res.json(commentWithReactions);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -203,8 +266,13 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
         if (error) throw error;
         
         // Get updated counts
-        const { upvotes, downvotes } = await getReactionCounts(id);
-        return res.json({ message: 'Reaction removed', upvotes, downvotes });
+        const reactions = await getCommentReactions(id, userId);
+        return res.json({ 
+          message: 'Reaction removed',
+          upvotes: reactions.upvotes,
+          downvotes: reactions.downvotes,
+          userReaction: reactions.userReaction
+        });
       } else {
         // Update to new reaction type
         const { error } = await supabase
@@ -216,8 +284,13 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
         if (error) throw error;
         
         // Get updated counts
-        const { upvotes, downvotes } = await getReactionCounts(id);
-        return res.json({ message: 'Reaction updated', upvotes, downvotes });
+        const reactions = await getCommentReactions(id, userId);
+        return res.json({ 
+          message: 'Reaction updated',
+          upvotes: reactions.upvotes,
+          downvotes: reactions.downvotes,
+          userReaction: reactions.userReaction
+        });
       }
     } else {
       // Create new reaction
@@ -232,8 +305,13 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
       if (error) throw error;
       
       // Get updated counts
-      const { upvotes, downvotes } = await getReactionCounts(id);
-      return res.json({ message: 'Reaction added', upvotes, downvotes });
+      const reactions = await getCommentReactions(id, userId);
+      return res.json({ 
+        message: 'Reaction added',
+        upvotes: reactions.upvotes,
+        downvotes: reactions.downvotes,
+        userReaction: reactions.userReaction
+      });
     }
   } catch (error) {
     console.error('Error handling reaction:', error);
@@ -245,21 +323,13 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
 router.get('/:id/reactions', async (req, res) => {
   try {
     const { id } = req.params;
-    const { upvotes, downvotes } = await getReactionCounts(id);
-    res.json({ upvotes, downvotes });
+    const userId = req.user?.userId;
+    const reactions = await getCommentReactions(id, userId);
+    res.json(reactions);
   } catch (error) {
     console.error('Error getting reactions:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
-// Helper function to get reaction counts
-async function getReactionCounts(commentId) {
-  const { data, error } = await supabase
-    .rpc('get_comment_reaction_counts', { comment_id: commentId });
-
-  if (error) throw error;
-  return data[0];
-}
 
 export default router;
