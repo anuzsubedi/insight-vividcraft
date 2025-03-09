@@ -520,4 +520,128 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
     }
 });
 
+// Add reaction to a post
+router.post('/:id/reactions', verifyToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.body;
+        const userId = req.user.userId;
+
+        if (!['upvote', 'downvote'].includes(type)) {
+            return res.status(400).json({ error: "Invalid reaction type" });
+        }
+
+        // Get existing reaction if any
+        const { data: existingReaction } = await supabase
+            .from('post_reactions')
+            .select()
+            .eq('user_id', userId)
+            .eq('post_id', id)
+            .single();
+
+        if (existingReaction) {
+            if (existingReaction.reaction_type === type) {
+                // Remove reaction if same type (toggle off)
+                const { error } = await supabase
+                    .from('post_reactions')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', id);
+
+                if (error) throw error;
+                
+                // Get updated counts
+                const { upvotes, downvotes } = await getReactionCounts(id);
+                return res.json({ 
+                    message: 'Reaction removed',
+                    upvotes,
+                    downvotes,
+                    userReaction: null
+                });
+            } else {
+                // Update to new reaction type
+                const { error } = await supabase
+                    .from('post_reactions')
+                    .update({ reaction_type: type })
+                    .eq('user_id', userId)
+                    .eq('post_id', id);
+
+                if (error) throw error;
+                
+                // Get updated counts
+                const { upvotes, downvotes } = await getReactionCounts(id);
+                return res.json({ 
+                    message: 'Reaction updated',
+                    upvotes,
+                    downvotes,
+                    userReaction: type
+                });
+            }
+        } else {
+            // Create new reaction
+            const { error } = await supabase
+                .from('post_reactions')
+                .insert([{
+                    user_id: userId,
+                    post_id: id,
+                    reaction_type: type
+                }]);
+
+            if (error) throw error;
+            
+            // Get updated counts
+            const { upvotes, downvotes } = await getReactionCounts(id);
+            return res.json({ 
+                message: 'Reaction added',
+                upvotes,
+                downvotes,
+                userReaction: type
+            });
+        }
+    } catch (error) {
+        console.error('Error handling reaction:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get reactions for a post
+router.get('/:id/reactions', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
+        // Get reaction counts
+        const { upvotes, downvotes } = await getReactionCounts(id);
+
+        // Get user's reaction if logged in
+        let userReaction = null;
+        if (userId) {
+            const { data: reaction } = await supabase
+                .from('post_reactions')
+                .select('reaction_type')
+                .eq('user_id', userId)
+                .eq('post_id', id)
+                .single();
+
+            if (reaction) {
+                userReaction = reaction.reaction_type;
+            }
+        }
+
+        res.json({ upvotes, downvotes, userReaction });
+    } catch (error) {
+        console.error('Error getting reactions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Helper function to get reaction counts
+async function getReactionCounts(postId) {
+    const { data, error } = await supabase
+        .rpc('get_post_reaction_counts', { post_id: postId });
+
+    if (error) throw error;
+    return data[0];
+}
+
 export default router;

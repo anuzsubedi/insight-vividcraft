@@ -53,6 +53,27 @@ export const postService = {
         }
     },
 
+    // Reaction operations
+    async addReaction(postId, type) {
+        try {
+            const response = await api.post(`/api/posts/${postId}/reactions`, { type });
+            return response.data;
+        } catch (error) {
+            console.error('[ADD REACTION] Error:', error);
+            throw new Error(error.response?.data?.error || 'Failed to add reaction');
+        }
+    },
+
+    async getReactions(postId) {
+        try {
+            const response = await api.get(`/api/posts/${postId}/reactions`);
+            return response.data;
+        } catch (error) {
+            console.error('[GET REACTIONS] Error:', error);
+            throw new Error(error.response?.data?.error || 'Failed to get reactions');
+        }
+    },
+
     // User posts operations
     async getUserPosts(username, filters = {}) {
         try {

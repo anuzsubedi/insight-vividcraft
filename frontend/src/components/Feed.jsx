@@ -16,24 +16,30 @@ import {
     MenuOptionGroup,
     useToast,
     Avatar,
-    Icon,
+    IconButton,
 } from '@chakra-ui/react';
-import { BiUpvote, BiDownvote, BiComment } from 'react-icons/bi';
+import { BiUpvote, BiDownvote, BiComment, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
 import { feedService } from '../services/feedService';
+import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
+import useAuthState from '../hooks/useAuthState';
 
 // Helper function to format date
 const formatPostDate = (date) => {
     return formatDistanceToNow(new Date(date), { addSuffix: true });
 };
 
+// Helper function to get net score
+const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
+
 function Feed() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user } = useAuthState();
     const [feedType, setFeedType] = useState('following');
     const [posts, setPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -65,12 +71,10 @@ function Feed() {
     // Load feed posts
     const loadPosts = useCallback(async () => {
         if (isLoading || !hasMore) return;
-
         setIsLoading(true);
         try {
             let response;
             const params = { page, limit: 10 };
-
             switch (feedType) {
                 case 'following':
                     response = await feedService.getFollowingFeed(params);
@@ -90,12 +94,30 @@ function Feed() {
                 default:
                     return;
             }
-
             if (!response || !response.posts) {
                 throw new Error('Invalid response format');
             }
 
-            setPosts(prev => page === 1 ? response.posts : [...prev, ...response.posts]);
+            // Load reactions for each post
+            const postsWithReactions = await Promise.all(response.posts.map(async (post) => {
+                try {
+                    const reactions = await postService.getReactions(post.id);
+                    return {
+                        ...post,
+                        reactions: reactions,
+                        userReaction: reactions.userReaction
+                    };
+                } catch (error) {
+                    console.error('Error loading reactions for post:', post.id, error);
+                    return {
+                        ...post,
+                        reactions: { upvotes: 0, downvotes: 0 },
+                        userReaction: null
+                    };
+                }
+            }));
+
+            setPosts(prev => page === 1 ? postsWithReactions : [...prev, ...postsWithReactions]);
             setHasMore(response.pagination.hasMore);
         } catch (error) {
             console.error('Feed error:', error);
@@ -130,6 +152,67 @@ function Feed() {
     useEffect(() => {
         loadPosts();
     }, [loadPosts, page]);
+
+    const handleReaction = async (e, postId, type) => {
+        e.stopPropagation(); // Prevent post click event
+
+        if (!user) {
+            toast({
+                title: 'Please login to react',
+                status: 'warning',
+                duration: 3000,
+            });
+            return;
+        }
+
+        const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
+        // Store previous state for rollback
+        const previousReactions = { ...post.reactions };
+        const previousUserReaction = post.userReaction;
+
+        // Optimistically update UI
+        const updatedPost = { ...post };
+        if (post.userReaction === type) {
+            // Removing reaction
+            updatedPost.reactions[`${type}s`] -= 1;
+            updatedPost.userReaction = null;
+        } else {
+            // If there was a previous reaction, remove it
+            if (post.userReaction) {
+                updatedPost.reactions[`${post.userReaction}s`] -= 1;
+            }
+            // Add new reaction
+            updatedPost.reactions[`${type}s`] += 1;
+            updatedPost.userReaction = type;
+        }
+
+        setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+
+        try {
+            const result = await postService.addReaction(postId, type);
+            setPosts(prev => prev.map(p => p.id === postId ? {
+                ...p,
+                reactions: result,
+                userReaction: result.userReaction
+            } : p));
+        } catch (error) {
+            // Revert on error
+            console.error('Error handling reaction:', error);
+            setPosts(prev => prev.map(p => p.id === postId ? {
+                ...p,
+                reactions: previousReactions,
+                userReaction: previousUserReaction
+            } : p));
+            toast({
+                title: 'Error updating reaction',
+                description: error.message,
+                status: 'error',
+                duration: 3000,
+            });
+        }
+    };
 
     // Handle feed type change
     const handleFeedTypeChange = (value) => {
@@ -174,7 +257,6 @@ function Feed() {
                     <option value="network">Network</option>
                     <option value="explore">Explore</option>
                 </ChakraSelect>
-
                 {feedType === 'explore' && (
                     <Menu closeOnSelect={false}>
                         <MenuButton
@@ -223,12 +305,10 @@ function Feed() {
                         boxShadow="6px 6px 0 black"
                         _hover={{
                             boxShadow: "8px 8px 0 black",
-                            cursor: "pointer"
                         }}
-                        onClick={() => handlePostClick(post.id)}
                         position="relative"
                     >
-                        <Box p={6}>
+                        <Box p={6} onClick={() => handlePostClick(post.id)} cursor="pointer">
                             <HStack spacing={4} mb={4}>
                                 <Avatar
                                     size="md"
@@ -262,7 +342,7 @@ function Feed() {
                                 </HStack>
                             </HStack>
 
-                            <Box pl={16} pr={6}> {/* Increased left padding from 14 to 16 */}
+                            <Box pl={16} pr={6}>
                                 {post.type === 'article' && post.title && (
                                     <Text 
                                         fontWeight="bold"
@@ -272,7 +352,6 @@ function Feed() {
                                         {post.title}
                                     </Text>
                                 )}
-
                                 <Text 
                                     fontSize="lg" 
                                     mb={4}
@@ -281,23 +360,40 @@ function Feed() {
                                 >
                                     {post.body}
                                 </Text>
-
-                                <HStack spacing={6} color="gray.600">
-                                    <HStack spacing={2}>
-                                        <Icon as={BiUpvote} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                    <HStack spacing={2}>
-                                        <Icon as={BiDownvote} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                    <HStack spacing={2}>
-                                        <Icon as={BiComment} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                </HStack>
                             </Box>
                         </Box>
+                        
+                        <HStack spacing={6} px={6} pb={4} onClick={e => e.stopPropagation()}>
+                            <HStack spacing={2}>
+                                <IconButton
+                                    icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                                    variant="ghost"
+                                    size="sm"
+                                    color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                                    aria-label="Upvote"
+                                    onClick={(e) => handleReaction(e, post.id, 'upvote')}
+                                />
+                                <Text 
+                                    color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "blue.500" : 
+                           getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : "gray.600"}
+                                    fontWeight="semibold"
+                                >
+                                    {getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0)}
+                                </Text>
+                                <IconButton
+                                    icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                                    variant="ghost"
+                                    size="sm"
+                                    color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                                    aria-label="Downvote"
+                                    onClick={(e) => handleReaction(e, post.id, 'downvote')}
+                                />
+                            </HStack>
+                            <HStack spacing={2}>
+                                <BiComment size={20} />
+                                <Text>{post.comment_count || 0}</Text>
+                            </HStack>
+                        </HStack>
                     </Box>
                 ))}
 
