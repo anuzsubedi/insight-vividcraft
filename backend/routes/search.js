@@ -1,6 +1,5 @@
 import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
-import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -20,8 +19,8 @@ const rankUserMatch = (username, query) => {
     return 0;
 };
 
-// Search users
-router.get('/users', authMiddleware, async (req, res) => {
+// Search users - removed authMiddleware
+router.get('/users', async (req, res) => {
     try {
         const { q: query, limit = 10 } = req.query;
         if (!query) return res.json({ users: [] });
@@ -44,16 +43,18 @@ router.get('/users', authMiddleware, async (req, res) => {
                 ...user,
                 score: rankUserMatch(user.username, searchQuery)
             }))
-            .sort((a, b) => b.score - a.score);
+            .sort((a, b) => b.score - a.score)
+            .map(({ score, ...user }) => user); // Remove score from response
 
         res.json({ users: sortedUsers });
     } catch (error) {
+        console.error('Search users error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Search posts and articles
-router.get('/posts', authMiddleware, async (req, res) => {
+// Search posts and articles - removed authMiddleware
+router.get('/posts', async (req, res) => {
     try {
         const { q: query, type, limit = 10 } = req.query;
         if (!query) return res.json({ posts: [] });
@@ -80,6 +81,7 @@ router.get('/posts', authMiddleware, async (req, res) => {
 
         res.json({ posts });
     } catch (error) {
+        console.error('Search posts error:', error);
         res.status(500).json({ error: error.message });
     }
 });
