@@ -19,7 +19,7 @@ const rankUserMatch = (username, query) => {
     return 0;
 };
 
-// Search users - removed authMiddleware
+// Search users
 router.get('/users', async (req, res) => {
     try {
         const { q: query, limit = 10 } = req.query;
@@ -53,12 +53,13 @@ router.get('/users', async (req, res) => {
     }
 });
 
-// Search posts and articles - removed authMiddleware
+// Search posts and articles with different search strategies
 router.get('/posts', async (req, res) => {
     try {
         const { q: query, type, limit = 10 } = req.query;
         if (!query) return res.json({ posts: [] });
 
+        const searchQuery = prepareSearchQuery(query);
         let dbQuery = supabase
             .from('posts')
             .select(`
@@ -66,11 +67,25 @@ router.get('/posts', async (req, res) => {
                 author:users!posts_author_id_fkey (username, display_name, avatar_name),
                 category:categories!posts_category_id_fkey (id, name)
             `)
-            .eq('status', 'published')
-            .or(`title.ilike.%${query}%,body.ilike.%${query}%`);
+            .eq('status', 'published');
 
-        if (type && type !== 'all') {
-            dbQuery = dbQuery.eq('type', type);
+        if (type === 'article') {
+            // For articles, search by tags
+            dbQuery = dbQuery
+                .eq('type', 'article')
+                // Using contains operator for array to check if any tag includes the search query
+                .filter('tags', 'cs', `{${searchQuery}}`);
+        } else if (type === 'post') {
+            // For posts, search by content
+            dbQuery = dbQuery
+                .eq('type', 'post')
+                .or(`title.ilike.%${searchQuery}%,body.ilike.%${searchQuery}%`);
+        } else {
+            // If no type specified, search both but with their respective strategies
+            dbQuery = dbQuery.or(
+                `and(type.eq.post,or(title.ilike.%${searchQuery}%,body.ilike.%${searchQuery}%)),` +
+                `and(type.eq.article,tags.cs.{${searchQuery}})`
+            );
         }
 
         const { data: posts, error } = await dbQuery

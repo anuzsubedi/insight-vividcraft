@@ -12,6 +12,7 @@ import {
     Text,
     Avatar,
     HStack,
+    Badge,
     Spinner,
     InputGroup,
     InputLeftElement,
@@ -81,7 +82,7 @@ function Search() {
                                 {isLoading ? <Spinner size="sm" /> : <SearchIcon color="gray.500" />}
                             </InputLeftElement>
                             <Input
-                                placeholder="Search users, posts, articles..."
+                                placeholder={activeTab === 2 ? "Search articles by tags..." : "Search users, posts, articles..."}
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 size="lg"
@@ -180,6 +181,9 @@ function Search() {
 
                                 <TabPanel>
                                     <VStack align="stretch" spacing={4}>
+                                        <Text fontSize="sm" color="gray.500" mb={2}>
+                                            Search articles by tags, e.g. &quot;javascript&quot;, &quot;react&quot;, &quot;tutorial&quot;
+                                        </Text>
                                         {results.articles.map(article => (
                                             <Box
                                                 key={article.id}
@@ -196,6 +200,18 @@ function Search() {
                                                 transition="all 0.2s"
                                             >
                                                 <Text fontWeight="bold" fontSize="lg" mb={2}>{article.title}</Text>
+                                                <HStack spacing={2} mb={3}>
+                                                    {article.tags?.map(tag => (
+                                                        <Badge
+                                                            key={tag}
+                                                            colorScheme="blue"
+                                                            variant="solid"
+                                                            fontSize="xs"
+                                                        >
+                                                            {tag}
+                                                        </Badge>
+                                                    ))}
+                                                </HStack>
                                                 <Text noOfLines={2} color="gray.600" mb={2}>{article.body}</Text>
                                                 <HStack fontSize="sm" color="gray.500" spacing={2}>
                                                     <Text>by @{article.author.username}</Text>
