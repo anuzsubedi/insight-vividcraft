@@ -40,25 +40,8 @@ function ViewPost() {
           return;
         }
         
-        // Always fetch fresh reaction data
-        try {
-          const reactions = await postService.getReactions(id);
-          setPost({
-            ...response.post,
-            reactions: {
-              upvotes: reactions.upvotes || 0,
-              downvotes: reactions.downvotes || 0
-            },
-            userReaction: user ? reactions.userReaction : null
-          });
-        } catch (error) {
-          console.error('Error loading reactions:', error);
-          setPost({
-            ...response.post,
-            reactions: { upvotes: 0, downvotes: 0 },
-            userReaction: null
-          });
-        }
+        // The post now comes with reactions from the server
+        setPost(response.post);
       } catch (error) {
         if (error.response?.status === 404) {
           navigate('/not-found', { replace: true });
@@ -77,7 +60,7 @@ function ViewPost() {
     };
 
     loadPost();
-  }, [id, user, toast, navigate]);
+  }, [id, toast, navigate]);
 
   const handleReaction = async (type) => {
     if (!user) {
@@ -113,9 +96,13 @@ function ViewPost() {
 
     try {
       const result = await postService.addReaction(id, type);
+      // Use the server response to update the state
       setPost(prev => ({
         ...prev,
-        reactions: result,
+        reactions: {
+          upvotes: result.upvotes || 0,
+          downvotes: result.downvotes || 0
+        },
         userReaction: result.userReaction
       }));
     } catch (error) {

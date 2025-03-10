@@ -96,16 +96,19 @@ function Feed() {
 
             // Add reactions to each post
             const postsWithReactions = await Promise.all(response.posts.map(async (post) => {
+                if (post.reactions && post.userReaction !== undefined) {
+                    // If reactions are already included in the response, use them
+                    return post;
+                }
                 try {
-                    // Always fetch fresh reaction data for each post
                     const reactions = await postService.getReactions(post.id);
                     return {
                         ...post,
                         reactions: {
                             upvotes: reactions.upvotes || 0,
-                            downvotes: reactions.downvotes || 0
+                            downvotes: reactions.downvotes || 0,
                         },
-                        userReaction: user ? reactions.userReaction : null
+                        userReaction: reactions.userReaction
                     };
                 } catch (error) {
                     console.error('Error loading reactions for post:', post.id, error);
@@ -132,7 +135,7 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, user, sortType, sortPeriod]);
+    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, sortType, sortPeriod]);
 
     // Reset feed when type or sort changes
     useEffect(() => {
@@ -192,14 +195,17 @@ function Feed() {
 
         try {
             const result = await postService.addReaction(postId, type);
+            // Use the server response to update the state
             setPosts(prev => prev.map(p => p.id === postId ? {
                 ...p,
-                reactions: result,
+                reactions: {
+                    upvotes: result.upvotes || 0,
+                    downvotes: result.downvotes || 0
+                },
                 userReaction: result.userReaction
             } : p));
         } catch (error) {
             // Revert on error
-            console.error('Error handling reaction:', error);
             setPosts(prev => prev.map(p => p.id === postId ? {
                 ...p,
                 reactions: previousReactions,

@@ -120,6 +120,41 @@ router.post("/", verifyToken, async (req, res) => {
     }
 });
 
+// Get reaction counts and user reaction in a single query
+async function getPostReactionsWithUser(postId, userId) {
+    try {
+        // Get both counts and user reaction in a single query
+        const { data, error } = await supabase
+            .from('post_reactions')
+            .select(`
+                reaction_type,
+                post_id,
+                user_id
+            `)
+            .match({ post_id: postId });
+
+        if (error) throw error;
+
+        // Calculate counts
+        const upvotes = data.filter(r => r.reaction_type === 'upvote').length;
+        const downvotes = data.filter(r => r.reaction_type === 'downvote').length;
+        
+        // Get user's reaction if they are logged in
+        const userReaction = userId ? 
+            (data.find(r => r.user_id === userId)?.reaction_type || null) : 
+            null;
+
+        return {
+            upvotes,
+            downvotes,
+            userReaction
+        };
+    } catch (error) {
+        console.error('Error getting post reactions:', error);
+        return { upvotes: 0, downvotes: 0, userReaction: null };
+    }
+}
+
 // Get post by ID
 router.get("/:id", async (req, res) => {
     try {
@@ -143,6 +178,47 @@ router.get("/:id", async (req, res) => {
         return res.status(200).json({ post });
     } catch (error) {
         return res.status(500).json({ error: "Failed to fetch post" });
+    }
+});
+
+// Get a single post
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
+        const { data: post, error } = await supabase
+            .from('posts')
+            .select(`
+                *,
+                profiles:users(id, username, display_name, avatar_name),
+                category:categories(id, name)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        if (!post) {
+            return res.status(404).json({ error: 'Post not found' });
+        }
+
+        // Get reactions including user's reaction
+        const reactions = await getPostReactionsWithUser(id, userId);
+        
+        // Add reactions to post object
+        const postWithReactions = {
+            ...post,
+            reactions: {
+                upvotes: reactions.upvotes,
+                downvotes: reactions.downvotes
+            },
+            userReaction: reactions.userReaction
+        };
+
+        res.json({ post: postWithReactions });
+    } catch (error) {
+        console.error('Error getting post:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

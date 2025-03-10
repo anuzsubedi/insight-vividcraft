@@ -13,30 +13,15 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [reactions, setReactions] = useState(comment.reactions || { upvotes: 0, downvotes: 0 });
-  const [userReaction, setUserReaction] = useState(user ? comment.userReaction : null);
+  const [userReaction, setUserReaction] = useState(comment.userReaction);
   const [isAnimating, setIsAnimating] = useState(false);
   const toast = useToast();
 
+  // Synchronize reactions when comment prop changes
   useEffect(() => {
-    // Update reactions and userReaction when comment prop changes
-    const fetchReactions = async () => {
-      try {
-        // Always fetch fresh reaction data
-        const result = await commentService.getReactions(comment.id);
-        setReactions({
-          upvotes: result.upvotes || 0,
-          downvotes: result.downvotes || 0
-        });
-        setUserReaction(user ? result.userReaction : null);
-      } catch (error) {
-        console.error('Error fetching reactions:', error);
-        setReactions(comment.reactions || { upvotes: 0, downvotes: 0 });
-        setUserReaction(user ? comment.userReaction : null);
-      }
-    };
-
-    fetchReactions();
-  }, [comment.id, user]);
+    setReactions(comment.reactions || { upvotes: 0, downvotes: 0 });
+    setUserReaction(comment.userReaction);
+  }, [comment.reactions, comment.userReaction]);
 
   const handleReaction = async (type) => {
     if (!user) {

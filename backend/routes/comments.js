@@ -33,49 +33,76 @@ async function getCommentReactions(commentId, userId) {
   };
 }
 
+// Helper function to get reaction counts and user reaction in a single query
+async function getCommentReactionsWithUser(commentId, userId) {
+    try {
+        // Get both counts and user reaction in a single query
+        const { data, error } = await supabase
+            .from('comment_reactions')
+            .select(`
+                reaction_type,
+                comment_id,
+                user_id
+            `)
+            .eq('comment_id', commentId);
+
+        if (error) throw error;
+
+        // Calculate counts
+        const upvotes = data.filter(r => r.reaction_type === 'upvote').length;
+        const downvotes = data.filter(r => r.reaction_type === 'downvote').length;
+        
+        // Get user's reaction if they are logged in
+        const userReaction = userId ? 
+            (data.find(r => r.user_id === userId)?.reaction_type || null) : 
+            null;
+
+        return {
+            upvotes,
+            downvotes,
+            userReaction
+        };
+    } catch (error) {
+        console.error('Error getting comment reactions:', error);
+        return { upvotes: 0, downvotes: 0, userReaction: null };
+    }
+}
+
 // Get comments for a post
-router.get('/:postId', async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const userId = req.user?.userId;
-    console.log('[GET COMMENTS] Request for postId:', postId);
-    
-    // Get comments
-    const { data: comments, error } = await supabase
-      .from('comments')
-      .select(`
-        *,
-        profiles:users(id, username, display_name, avatar_name)
-      `)
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
+router.get('/post/:postId', async (req, res) => {
+    try {
+        const { postId } = req.params;
+        const userId = req.user?.userId;
 
-    if (error) throw error;
+        const { data: comments, error } = await supabase
+            .from('comments')
+            .select(`
+                *,
+                profiles:users(id, username, display_name, avatar_name)
+            `)
+            .eq('post_id', postId)
+            .order('created_at', { ascending: true });
 
-    // Add reactions for each comment
-    const commentsWithReactions = await Promise.all(comments.map(async (comment) => {
-      const reactions = await getCommentReactions(comment.id, userId);
-      return {
-        ...comment,
-        reactions: {
-          upvotes: reactions.upvotes,
-          downvotes: reactions.downvotes
-        },
-        userReaction: reactions.userReaction
-      };
-    }));
+        if (error) throw error;
 
-    console.log('[GET COMMENTS] Query result:', { 
-      success: true,
-      commentCount: commentsWithReactions.length,
-      firstComment: commentsWithReactions[0]
-    });
+        // Get reactions for all comments in parallel
+        const commentsWithReactions = await Promise.all(comments.map(async (comment) => {
+            const reactions = await getCommentReactionsWithUser(comment.id, userId);
+            return {
+                ...comment,
+                reactions: {
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes
+                },
+                userReaction: reactions.userReaction
+            };
+        }));
 
-    res.json(commentsWithReactions);
-  } catch (error) {
-    console.error('[GET COMMENTS] Error:', error);
-    res.status(500).json({ error: error.message });
-  }
+        res.json(commentsWithReactions);
+    } catch (error) {
+        console.error('Error getting comments:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Create a comment
@@ -237,86 +264,86 @@ router.delete('/:id', verifyToken, async (req, res) => {
 
 // Add reaction to a comment
 router.post('/:id/reactions', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { type } = req.body;
-    const userId = req.user.userId;
+    try {
+        const { id } = req.params;
+        const { type } = req.body;
+        const userId = req.user.userId;
 
-    if (!['upvote', 'downvote'].includes(type)) {
-      return res.status(400).json({ error: "Invalid reaction type" });
+        if (!['upvote', 'downvote'].includes(type)) {
+            return res.status(400).json({ error: "Invalid reaction type" });
+        }
+
+        // Get existing reaction if any
+        const { data: existingReaction } = await supabase
+            .from('comment_reactions')
+            .select()
+            .eq('user_id', userId)
+            .eq('comment_id', id)
+            .single();
+
+        if (existingReaction) {
+            if (existingReaction.reaction_type === type) {
+                // Remove reaction if same type (toggle off)
+                const { error } = await supabase
+                    .from('comment_reactions')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('comment_id', id);
+
+                if (error) throw error;
+                
+                // Get updated reactions
+                const reactions = await getCommentReactionsWithUser(id, userId);
+                return res.json({ 
+                    message: 'Reaction removed',
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes,
+                    userReaction: reactions.userReaction
+                });
+            } else {
+                // Update to new reaction type
+                const { error } = await supabase
+                    .from('comment_reactions')
+                    .update({ reaction_type: type })
+                    .eq('user_id', userId)
+                    .eq('comment_id', id);
+
+                if (error) throw error;
+                
+                // Get updated reactions
+                const reactions = await getCommentReactionsWithUser(id, userId);
+                return res.json({ 
+                    message: 'Reaction updated',
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes,
+                    userReaction: reactions.userReaction
+                });
+            }
+        } else {
+            // Create new reaction
+            const { error } = await supabase
+                .from('comment_reactions')
+                .insert([{
+                    user_id: userId,
+                    comment_id: id,
+                    reaction_type: type
+                }]);
+
+            if (error) throw error;
+            
+            // Get updated reactions
+            const reactions = await getCommentReactionsWithUser(id, userId);
+            return res.json({ 
+                message: 'Reaction added',
+                upvotes: reactions.upvotes,
+                downvotes: reactions.downvotes,
+                userReaction: reactions.userReaction
+            });
+        }
+    } catch (error) {
+        console.error('Error handling reaction:', error);
+        res.status(500).json({ error: error.message });
     }
-
-    // Get existing reaction if any
-    const { data: existingReaction } = await supabase
-      .from('comment_reactions')
-      .select()
-      .eq('user_id', userId)
-      .eq('comment_id', id)
-      .single();
-
-    if (existingReaction) {
-      if (existingReaction.reaction_type === type) {
-        // Remove reaction if same type (toggle off)
-        const { error } = await supabase
-          .from('comment_reactions')
-          .delete()
-          .eq('user_id', userId)
-          .eq('comment_id', id);
-
-        if (error) throw error;
-        
-        // Get updated counts
-        const reactions = await getCommentReactions(id, userId);
-        return res.json({ 
-          message: 'Reaction removed',
-          upvotes: reactions.upvotes,
-          downvotes: reactions.downvotes,
-          userReaction: reactions.userReaction
-        });
-      } else {
-        // Update to new reaction type
-        const { error } = await supabase
-          .from('comment_reactions')
-          .update({ reaction_type: type })
-          .eq('user_id', userId)
-          .eq('comment_id', id);
-
-        if (error) throw error;
-        
-        // Get updated counts
-        const reactions = await getCommentReactions(id, userId);
-        return res.json({ 
-          message: 'Reaction updated',
-          upvotes: reactions.upvotes,
-          downvotes: reactions.downvotes,
-          userReaction: reactions.userReaction
-        });
-      }
-    } else {
-      // Create new reaction
-      const { error } = await supabase
-        .from('comment_reactions')
-        .insert([{
-          user_id: userId,
-          comment_id: id,
-          reaction_type: type
-        }]);
-
-      if (error) throw error;
-      
-      // Get updated counts
-      const reactions = await getCommentReactions(id, userId);
-      return res.json({ 
-        message: 'Reaction added',
-        upvotes: reactions.upvotes,
-        downvotes: reactions.downvotes,
-        userReaction: reactions.userReaction
-      });
-    }
-  } catch (error) {
-    console.error('Error handling reaction:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 // Get reactions for a comment
