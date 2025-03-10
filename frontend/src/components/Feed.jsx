@@ -49,6 +49,8 @@ function Feed() {
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuthState();
+    const [sortType, setSortType] = useState('recent');
+    const [sortPeriod, setSortPeriod] = useState('all');
 
     // Load categories on mount
     useEffect(() => {
@@ -73,6 +75,8 @@ function Feed() {
             const params = {
                 page,
                 limit: 10,
+                sort: sortType,
+                period: sortType === 'top' ? sortPeriod : undefined,
                 ...(selectedCategories.length ? { categories: selectedCategories.join(',') } : {})
             };
 
@@ -128,14 +132,14 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, user]);
+    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, user, sortType, sortPeriod]);
 
-    // Reset feed when type changes
+    // Reset feed when type or sort changes
     useEffect(() => {
         setPosts([]);
         setPage(1);
         setHasMore(true);
-    }, [feedType, selectedCategories]);
+    }, [feedType, selectedCategories, sortType, sortPeriod]);
 
     // Load more posts when scrolling to bottom
     useEffect(() => {
@@ -237,8 +241,8 @@ function Feed() {
             {/* Create Post Form */}
             <CreatePost categories={categories} onPostCreated={handlePostCreated} />
 
-            {/* Feed Type Selector */}
-            <HStack spacing={4}>
+            {/* Feed Controls */}
+            <HStack spacing={4} wrap="wrap">
                 <ChakraSelect
                     value={feedType}
                     onChange={(e) => handleFeedTypeChange(e.target.value)}
@@ -253,6 +257,42 @@ function Feed() {
                     <option value="network">Network</option>
                     <option value="explore">Explore</option>
                 </ChakraSelect>
+
+                {feedType !== 'explore' && (
+                    <ChakraSelect
+                        value={sortType}
+                        onChange={(e) => setSortType(e.target.value)}
+                        w="150px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="recent">Recent</option>
+                        <option value="top">Top</option>
+                    </ChakraSelect>
+                )}
+
+                {sortType === 'top' && feedType !== 'explore' && (
+                    <ChakraSelect
+                        value={sortPeriod}
+                        onChange={(e) => setSortPeriod(e.target.value)}
+                        w="150px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="day">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="all">All Time</option>
+                    </ChakraSelect>
+                )}
+
                 {feedType === 'explore' && (
                     <Menu closeOnSelect={false}>
                         <MenuButton
