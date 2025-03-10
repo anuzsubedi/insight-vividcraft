@@ -18,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
+import SearchDropdown from "./components/SearchDropdown";
 
 const MotionBox = motion(Box);
 
@@ -102,25 +103,7 @@ function App() {
             </MotionBox>
 
             <HStack spacing={6}>
-              <Button
-                as={Link}
-                to="/posts/new"
-                bg="black"
-                color="white"
-                border="2px solid black"
-                px={6}
-                h="45px"
-                _hover={{
-                  transform: "translate(-2px, -2px)",
-                  boxShadow: "4px 4px 0 0 #000",
-                }}
-                _active={{
-                  transform: "translate(0px, 0px)",
-                  boxShadow: "none",
-                }}
-              >
-                New Post
-              </Button>
+              <SearchDropdown />
 
               <Menu>
                 <MenuButton
@@ -177,6 +160,14 @@ function App() {
                     _hover={{ bg: "paper.100" }}
                   >
                     Settings
+                  </MenuItem>
+                  <MenuItem
+                    as={Link}
+                    to="/posts/new"
+                    borderRadius="0"
+                    _hover={{ bg: "paper.100" }}
+                  >
+                    Create New Post
                   </MenuItem>
                   <Divider my={2} borderColor="paper.200" />
                   <MenuItem

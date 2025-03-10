@@ -8,6 +8,7 @@ import postRoutes from "./routes/posts.js";
 import categoriesRoutes from "./routes/categories.js";
 import feedRoutes from "./routes/feed.js";
 import commentsRouter from "./routes/comments.js";
+import searchRoutes from "./routes/search.js";
 import requestLogger from "./middleware/requestLogger.js";
 
 // Load environment variables
@@ -31,6 +32,7 @@ app.use("/api/posts", postRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/comments", commentsRouter);
+app.use("/api/search", searchRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({
