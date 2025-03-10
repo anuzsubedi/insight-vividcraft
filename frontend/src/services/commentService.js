@@ -3,7 +3,7 @@ import api from '../api/axios';
 const getComments = async (postId) => {
   try {
     console.log('[commentService] Getting comments for post:', postId);
-    const response = await api.get(`/api/comments/${postId}`);
+    const response = await api.get(`/api/comments/post/${postId}`);
     console.log('[commentService] Received comments:', response.data);
     return response.data;
   } catch (error) {

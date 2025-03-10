@@ -120,29 +120,82 @@ router.post("/", verifyToken, async (req, res) => {
     }
 });
 
-// Get post by ID
-router.get("/:id", async (req, res) => {
+// Get reaction counts and user reaction in a single query
+async function getPostReactionsWithUser(postId, userId) {
     try {
+        // Get both counts and user reaction in a single query
+        const { data, error } = await supabase
+            .from('post_reactions')
+            .select(`
+                reaction_type,
+                post_id,
+                user_id
+            `)
+            .match({ post_id: postId });
+
+        if (error) throw error;
+
+        // Calculate counts
+        const upvotes = data.filter(r => r.reaction_type === 'upvote').length;
+        const downvotes = data.filter(r => r.reaction_type === 'downvote').length;
+        
+        // Get user's reaction if they are logged in
+        const userReaction = userId ? 
+            (data.find(r => r.user_id === userId)?.reaction_type || null) : 
+            null;
+
+        return {
+            upvotes,
+            downvotes,
+            userReaction
+        };
+    } catch (error) {
+        console.error('Error getting post reactions:', error);
+        return { upvotes: 0, downvotes: 0, userReaction: null };
+    }
+}
+
+// Get post by ID
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+
         const { data: post, error } = await supabase
             .from('posts')
             .select(`
                 *,
-                author:users(id, username, display_name),
+                author:users(id, username, display_name, avatar_name),
                 category:categories(id, name)
             `)
-            .eq('id', req.params.id)
+            .eq('id', id)
             .single();
 
-        if (error || !post) {
-            return res.status(404).json({ error: "Post not found" });
+        if (error) throw error;
+        if (!post) {
+            return res.status(404).json({ error: 'Post not found' });
         }
 
-        // Ensure tags is always an array
-        post.tags = post.tags || [];
+        // Get reactions including user's reaction
+        const reactions = await getPostReactionsWithUser(id, userId);
+        
+        // Add reactions to post object
+        const postWithReactions = {
+            ...post,
+            reactions: {
+                upvotes: reactions.upvotes,
+                downvotes: reactions.downvotes
+            },
+            userReaction: reactions.userReaction
+        };
 
-        return res.status(200).json({ post });
+        // Ensure tags is always an array
+        postWithReactions.tags = postWithReactions.tags || [];
+
+        res.json({ post: postWithReactions });
     } catch (error) {
-        return res.status(500).json({ error: "Failed to fetch post" });
+        console.error('Error getting post:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -519,5 +572,105 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
         });
     }
 });
+
+// Add reaction to a post
+router.post('/:id/reactions', verifyToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.body;
+        const userId = req.user.userId;
+
+        if (!['upvote', 'downvote'].includes(type)) {
+            return res.status(400).json({ error: "Invalid reaction type" });
+        }
+
+        // Get existing reaction if any
+        const { data: existingReaction } = await supabase
+            .from('post_reactions')
+            .select()
+            .eq('user_id', userId)
+            .eq('post_id', id)
+            .single();
+
+        if (existingReaction) {
+            if (existingReaction.reaction_type === type) {
+                // Remove reaction if same type (toggle off)
+                const { error } = await supabase
+                    .from('post_reactions')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', id);
+
+                if (error) throw error;
+                
+                // Get updated reactions with user reaction
+                const reactions = await getPostReactionsWithUser(id, userId);
+                return res.json({ 
+                    message: 'Reaction removed',
+                    ...reactions
+                });
+            } else {
+                // Update to new reaction type
+                const { error } = await supabase
+                    .from('post_reactions')
+                    .update({ reaction_type: type })
+                    .eq('user_id', userId)
+                    .eq('post_id', id);
+
+                if (error) throw error;
+                
+                // Get updated reactions with user reaction
+                const reactions = await getPostReactionsWithUser(id, userId);
+                return res.json({ 
+                    message: 'Reaction updated',
+                    ...reactions
+                });
+            }
+        } else {
+            // Create new reaction
+            const { error } = await supabase
+                .from('post_reactions')
+                .insert([{
+                    user_id: userId,
+                    post_id: id,
+                    reaction_type: type
+                }]);
+
+            if (error) throw error;
+            
+            // Get updated reactions with user reaction
+            const reactions = await getPostReactionsWithUser(id, userId);
+            return res.json({ 
+                message: 'Reaction added',
+                ...reactions
+            });
+        }
+    } catch (error) {
+        console.error('Error handling reaction:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get reactions for a post
+router.get('/:id/reactions', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user?.userId;
+        const reactions = await getPostReactionsWithUser(id, userId);
+        res.json(reactions);
+    } catch (error) {
+        console.error('Error getting reactions:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Helper function to get reaction counts
+async function getReactionCounts(postId) {
+    const { data, error } = await supabase
+        .rpc('get_post_reaction_counts', { post_id: postId });
+
+    if (error) throw error;
+    return data[0];
+}
 
 export default router;
