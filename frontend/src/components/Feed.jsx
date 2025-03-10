@@ -16,60 +16,69 @@ import {
     MenuOptionGroup,
     useToast,
     Avatar,
-    Icon,
+    IconButton,
 } from '@chakra-ui/react';
-import { BiUpvote, BiDownvote, BiComment } from 'react-icons/bi';
+import { BiUpvote, BiDownvote, BiComment, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
 import { feedService } from '../services/feedService';
+import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
+import useAuthState from '../hooks/useAuthState';
 
 // Helper function to format date
 const formatPostDate = (date) => {
     return formatDistanceToNow(new Date(date), { addSuffix: true });
 };
 
+// Helper function to get net score
+const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
+
 function Feed() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const [feedType, setFeedType] = useState('following');
     const [posts, setPosts] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [categories, setCategories] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
-    const toast = useToast();
+    const [feedType, setFeedType] = useState('following');
     const { ref, inView } = useInView();
+    const toast = useToast();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const { user } = useAuthState();
+    const [sortType, setSortType] = useState('recent');
+    const [sortPeriod, setSortPeriod] = useState('all');
 
-    // Load categories
+    // Load categories on mount
     useEffect(() => {
-        const fetchCategories = async () => {
+        const loadCategories = async () => {
             try {
-                const response = await categoryService.getCategories();
-                setCategories(response.categories || []);
+                const data = await categoryService.getCategories();
+                setCategories(data);
             } catch (error) {
-                toast({
-                    title: 'Error loading categories',
-                    description: error.message,
-                    status: 'error',
-                    duration: 3000,
-                });
+                console.error('Error loading categories:', error);
             }
         };
-        fetchCategories();
-    }, [toast]);
+        loadCategories();
+    }, []);
 
-    // Load feed posts
+    // Load posts
     const loadPosts = useCallback(async () => {
         if (isLoading || !hasMore) return;
 
         setIsLoading(true);
         try {
             let response;
-            const params = { page, limit: 10 };
+            const params = {
+                page,
+                limit: 10,
+                sort: sortType,
+                period: sortType === 'top' ? sortPeriod : undefined,
+                ...(selectedCategories.length ? { categories: selectedCategories.join(',') } : {})
+            };
 
             switch (feedType) {
                 case 'following':
@@ -79,23 +88,39 @@ function Feed() {
                     response = await feedService.getNetworkFeed(params);
                     break;
                 case 'explore':
-                    if (selectedCategories.length > 0) {
-                        params.categories = selectedCategories.join(',');
-                    }
                     response = await feedService.getExploreFeed(params);
-                    if (response.categories) {
-                        setCategories(response.categories);
-                    }
                     break;
                 default:
-                    return;
+                    throw new Error('Invalid feed type');
             }
 
-            if (!response || !response.posts) {
-                throw new Error('Invalid response format');
-            }
+            // Add reactions to each post
+            const postsWithReactions = await Promise.all(response.posts.map(async (post) => {
+                if (post.reactions && post.userReaction !== undefined) {
+                    // If reactions are already included in the response, use them
+                    return post;
+                }
+                try {
+                    const reactions = await postService.getReactions(post.id);
+                    return {
+                        ...post,
+                        reactions: {
+                            upvotes: reactions.upvotes || 0,
+                            downvotes: reactions.downvotes || 0,
+                        },
+                        userReaction: reactions.userReaction
+                    };
+                } catch (error) {
+                    console.error('Error loading reactions for post:', post.id, error);
+                    return {
+                        ...post,
+                        reactions: { upvotes: 0, downvotes: 0 },
+                        userReaction: null
+                    };
+                }
+            }));
 
-            setPosts(prev => page === 1 ? response.posts : [...prev, ...response.posts]);
+            setPosts(prev => page === 1 ? postsWithReactions : [...prev, ...postsWithReactions]);
             setHasMore(response.pagination.hasMore);
         } catch (error) {
             console.error('Feed error:', error);
@@ -110,14 +135,14 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, page, selectedCategories, isLoading, hasMore, toast]);
+    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, sortType, sortPeriod]);
 
-    // Reset feed when type changes
+    // Reset feed when type or sort changes
     useEffect(() => {
         setPosts([]);
         setPage(1);
         setHasMore(true);
-    }, [feedType, selectedCategories]);
+    }, [feedType, selectedCategories, sortType, sortPeriod]);
 
     // Load more posts when scrolling to bottom
     useEffect(() => {
@@ -130,6 +155,70 @@ function Feed() {
     useEffect(() => {
         loadPosts();
     }, [loadPosts, page]);
+
+    const handleReaction = async (e, postId, type) => {
+        e.stopPropagation(); // Prevent post click event
+
+        if (!user) {
+            toast({
+                title: 'Please login to react',
+                status: 'warning',
+                duration: 3000,
+            });
+            return;
+        }
+
+        const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
+        // Store previous state for rollback
+        const previousReactions = { ...post.reactions };
+        const previousUserReaction = post.userReaction;
+
+        // Optimistically update UI
+        const updatedPost = { ...post };
+        if (post.userReaction === type) {
+            // Removing reaction
+            updatedPost.reactions[`${type}s`] -= 1;
+            updatedPost.userReaction = null;
+        } else {
+            // If there was a previous reaction, remove it
+            if (post.userReaction) {
+                updatedPost.reactions[`${post.userReaction}s`] -= 1;
+            }
+            // Add new reaction
+            updatedPost.reactions[`${type}s`] += 1;
+            updatedPost.userReaction = type;
+        }
+
+        setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+
+        try {
+            const result = await postService.addReaction(postId, type);
+            // Use the server response to update the state
+            setPosts(prev => prev.map(p => p.id === postId ? {
+                ...p,
+                reactions: {
+                    upvotes: result.upvotes || 0,
+                    downvotes: result.downvotes || 0
+                },
+                userReaction: result.userReaction
+            } : p));
+        } catch (error) {
+            // Revert on error
+            setPosts(prev => prev.map(p => p.id === postId ? {
+                ...p,
+                reactions: previousReactions,
+                userReaction: previousUserReaction
+            } : p));
+            toast({
+                title: 'Error updating reaction',
+                description: error.message,
+                status: 'error',
+                duration: 3000,
+            });
+        }
+    };
 
     // Handle feed type change
     const handleFeedTypeChange = (value) => {
@@ -158,8 +247,8 @@ function Feed() {
             {/* Create Post Form */}
             <CreatePost categories={categories} onPostCreated={handlePostCreated} />
 
-            {/* Feed Type Selector */}
-            <HStack spacing={4}>
+            {/* Feed Controls */}
+            <HStack spacing={4} wrap="wrap">
                 <ChakraSelect
                     value={feedType}
                     onChange={(e) => handleFeedTypeChange(e.target.value)}
@@ -174,6 +263,41 @@ function Feed() {
                     <option value="network">Network</option>
                     <option value="explore">Explore</option>
                 </ChakraSelect>
+
+                {feedType !== 'explore' && (
+                    <ChakraSelect
+                        value={sortType}
+                        onChange={(e) => setSortType(e.target.value)}
+                        w="150px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="recent">Recent</option>
+                        <option value="top">Top</option>
+                    </ChakraSelect>
+                )}
+
+                {sortType === 'top' && feedType !== 'explore' && (
+                    <ChakraSelect
+                        value={sortPeriod}
+                        onChange={(e) => setSortPeriod(e.target.value)}
+                        w="150px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="day">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="year">This Year</option>
+                        <option value="all">All Time</option>
+                    </ChakraSelect>
+                )}
 
                 {feedType === 'explore' && (
                     <Menu closeOnSelect={false}>
@@ -222,13 +346,14 @@ function Feed() {
                         border="2px solid black"
                         boxShadow="6px 6px 0 black"
                         _hover={{
-                            boxShadow: "8px 8px 0 black",
+                            transform: "translate(-3px, -3px)",
+                            boxShadow: "9px 9px 0 black",
                             cursor: "pointer"
                         }}
-                        onClick={() => handlePostClick(post.id)}
+                        transition="all 0.2s"
                         position="relative"
                     >
-                        <Box p={6}>
+                        <Box p={6} onClick={() => handlePostClick(post.id)} cursor="pointer">
                             <HStack spacing={4} mb={4}>
                                 <Avatar
                                     size="md"
@@ -256,13 +381,12 @@ function Feed() {
                                                     {post.category.name}
                                                 </Badge>
                                             )}
-                                            
                                         </>
                                     )}
                                 </HStack>
                             </HStack>
 
-                            <Box pl={16} pr={6}> {/* Increased left padding from 14 to 16 */}
+                            <Box pl={16} pr={6}>
                                 {post.type === 'article' && post.title && (
                                     <Text 
                                         fontWeight="bold"
@@ -272,7 +396,6 @@ function Feed() {
                                         {post.title}
                                     </Text>
                                 )}
-
                                 <Text 
                                     fontSize="lg" 
                                     mb={4}
@@ -281,23 +404,40 @@ function Feed() {
                                 >
                                     {post.body}
                                 </Text>
-
-                                <HStack spacing={6} color="gray.600">
-                                    <HStack spacing={2}>
-                                        <Icon as={BiUpvote} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                    <HStack spacing={2}>
-                                        <Icon as={BiDownvote} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                    <HStack spacing={2}>
-                                        <Icon as={BiComment} boxSize={5} />
-                                        <Text>0</Text>
-                                    </HStack>
-                                </HStack>
                             </Box>
                         </Box>
+                        
+                        <HStack spacing={6} px={6} pb={4} onClick={e => e.stopPropagation()}>
+                            <HStack spacing={2}>
+                                <IconButton
+                                    icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                                    variant="ghost"
+                                    size="sm"
+                                    color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                                    aria-label="Upvote"
+                                    onClick={(e) => handleReaction(e, post.id, 'upvote')}
+                                />
+                                <Text 
+                                    color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "blue.500" : 
+                           getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : "gray.600"}
+                                    fontWeight="semibold"
+                                >
+                                    {getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0)}
+                                </Text>
+                                <IconButton
+                                    icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                                    variant="ghost"
+                                    size="sm"
+                                    color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                                    aria-label="Downvote"
+                                    onClick={(e) => handleReaction(e, post.id, 'downvote')}
+                                />
+                            </HStack>
+                            <HStack spacing={2}>
+                                <BiComment size={20} />
+                                <Text>{post.comment_count || 0}</Text>
+                            </HStack>
+                        </HStack>
                     </Box>
                 ))}
 

@@ -7,6 +7,9 @@ import socialRoutes from "./routes/social.js";
 import postRoutes from "./routes/posts.js";
 import categoriesRoutes from "./routes/categories.js";
 import feedRoutes from "./routes/feed.js";
+import commentsRouter from "./routes/comments.js";
+import searchRoutes from "./routes/search.js";
+import requestLogger from "./middleware/requestLogger.js";
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +22,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);  // Add request logging before routes
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -27,6 +31,8 @@ app.use("/api/social", socialRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/feed", feedRoutes);
+app.use("/api/comments", commentsRouter);
+app.use("/api/search", searchRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({
@@ -45,11 +51,22 @@ app.get("/health", (_req, res) => {
 });
 
 // Error handling middleware
-app.use((err, _req, res, _next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        status: "error",
-        message: "Something went wrong!"
+app.use((err, req, res, next) => {
+    console.error('[ERROR]', {
+        method: req.method,
+        url: req.url,
+        params: req.params,
+        query: req.query,
+        body: req.body,
+        error: {
+            message: err.message,
+            stack: err.stack,
+            name: err.name
+        }
+    });
+    
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error'
     });
 });
 

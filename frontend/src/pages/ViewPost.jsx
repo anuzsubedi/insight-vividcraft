@@ -11,39 +11,73 @@ import {
   useToast,
   Spinner,
   Box,
+  IconButton,
+  Center,
+  Avatar,
+  Divider
 } from "@chakra-ui/react";
-import { ChevronDownIcon } from "@chakra-ui/icons";
+import { ChevronLeftIcon } from "@chakra-ui/icons";
+import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from "react-icons/bi";
 import { postService } from "../services/postService";
+import Comments from '../components/Comments';
+import useAuthState from '../hooks/useAuthState';
+import { formatDistanceToNow } from 'date-fns';
+
+// Helper function to get net score
+const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
 
 function ViewPost() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const toast = useToast();
   const [post, setPost] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuthState();
+  const toast = useToast();
+  const [isReactionAnimating, setIsReactionAnimating] = useState(false);
 
   useEffect(() => {
     const loadPost = async () => {
       try {
-        const response = await postService.getPost(id);
-        if (!response.post) {
-          navigate('/not-found', { replace: true });
+        const data = await postService.getPost(id);
+        if (!data) {
+          navigate('/404');
           return;
         }
-        setPost(response.post);
-      } catch (error) {
-        if (error.response?.status === 404) {
-          navigate('/not-found', { replace: true });
+        // Get post with reactions from response
+        const post = data.post;
+        if (!post.reactions || post.userReaction === undefined) {
+          // If reactions are not included in post response, fetch them
+          try {
+            const reactions = await postService.getReactions(post.id);
+            setPost({
+              ...post,
+              reactions: {
+                upvotes: reactions.upvotes || 0,
+                downvotes: reactions.downvotes || 0
+              },
+              userReaction: reactions.userReaction
+            });
+          } catch (error) {
+            console.error('Error loading reactions:', error);
+            setPost({
+              ...post,
+              reactions: { upvotes: 0, downvotes: 0 },
+              userReaction: null
+            });
+          }
         } else {
-          toast({
-            title: "Error loading post",
-            description: error.response?.data?.error || error.message,
-            status: "error",
-            duration: 5000,
-          });
-          navigate("/");
+          setPost(post);
         }
+      } catch (error) {
+        console.error('Error loading post:', error);
+        toast({
+          title: 'Error loading post',
+          description: error.message,
+          status: 'error',
+          duration: 3000,
+        });
+        navigate('/404');
       } finally {
         setIsLoading(false);
       }
@@ -51,6 +85,68 @@ function ViewPost() {
 
     loadPost();
   }, [id, toast, navigate]);
+
+  const handleReaction = async (type) => {
+    if (!user) {
+      toast({
+        title: 'Please login to react',
+        status: 'warning',
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Store previous state for rollback
+    const previousReactions = { ...post.reactions };
+    const previousUserReaction = post.userReaction;
+
+    // Optimistically update UI
+    setIsReactionAnimating(true);
+    const updatedPost = { ...post };
+    if (post.userReaction === type) {
+      // Removing reaction
+      updatedPost.reactions[`${type}s`] -= 1;
+      updatedPost.userReaction = null;
+    } else {
+      // If there was a previous reaction, remove it
+      if (post.userReaction) {
+        updatedPost.reactions[`${post.userReaction}s`] -= 1;
+      }
+      // Add new reaction
+      updatedPost.reactions[`${type}s`] += 1;
+      updatedPost.userReaction = type;
+    }
+
+    setPost(updatedPost);
+
+    try {
+      const result = await postService.addReaction(id, type);
+      // Use the server response to update the state
+      setPost(prev => ({
+        ...prev,
+        reactions: {
+          upvotes: result.upvotes || 0,
+          downvotes: result.downvotes || 0
+        },
+        userReaction: result.userReaction
+      }));
+    } catch (error) {
+      // Revert on error
+      setPost(prev => ({
+        ...prev,
+        reactions: previousReactions,
+        userReaction: previousUserReaction
+      }));
+      toast({
+        title: 'Error updating reaction',
+        description: error.message,
+        status: 'error',
+        duration: 3000,
+      });
+    } finally {
+      setTimeout(() => setIsReactionAnimating(false), 300); // Animation duration
+    }
+  };
 
   const handleBack = () => {
     if (location.state?.from) {
@@ -62,52 +158,79 @@ function ViewPost() {
 
   if (isLoading) {
     return (
-      <Container maxW="container.lg" py={8}>
-        <Spinner size="xl" />
+      <Container maxW="container.md" py={8}>
+        <Center>
+          <Spinner size="xl" />
+        </Center>
       </Container>
     );
   }
 
+  if (!post) return null;
+
   return (
-    <Container maxW="container.lg" py={8}>
-      <Button
-        onClick={handleBack}
-        variant="outline"
-        mb={8}
-        leftIcon={<ChevronDownIcon transform="rotate(90deg)" />}
-        borderWidth="2px"
-        borderColor="black"
-        boxShadow="3px 3px 0 black"
-        _hover={{ transform: "translate(-2px, -2px)", boxShadow: "5px 5px 0 black" }}
-        _active={{ transform: "translate(0px, 0px)", boxShadow: "1px 1px 0 black" }}
+    <Container maxW="container.md" py={8}>
+      {/* Header */}
+      <Button 
+        leftIcon={<ChevronLeftIcon />} 
+        onClick={handleBack} 
+        mb={6}
+        variant="ghost"
+        color="gray.600"
       >
-        {location.state?.from ? "Back" : (
-          <Text fontFamily="monospace" fontSize="sm">
-            insight
-          </Text>
-        )}
+        Back
       </Button>
 
-      <Box
-        bg="white"
-        p={8}
-        border="2px solid"
-        borderColor="black"
-        boxShadow="6px 6px 0 black"
-      >
-        <VStack align="stretch" spacing={6}>
-          <Heading size="xl">{post.title}</Heading>
-          
-          <HStack wrap="wrap" spacing={4}>
+      <Box bg="white" rounded="lg" overflow="hidden" shadow="lg">
+        {/* Author info and metadata */}
+        <Box px={8} pt={6} pb={3}>
+          <HStack spacing={4} mb={6}>
+            <Avatar
+              size="md"
+              name={post.author.username}
+              src={`/avatars/${post.author.avatar_name}`}
+              border="2px solid"
+              borderColor="gray.200"
+            />
+            <VStack align="start" spacing={0}>
+              <Link
+                to={`/user/${post.author.username}`}
+                style={{ textDecoration: "none" }}
+              >
+                <Text fontWeight="bold" color="gray.700">@{post.author.username}</Text>
+              </Link>
+              <Text fontSize="sm" color="gray.500">
+                {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
+              </Text>
+            </VStack>
+          </HStack>
+
+          {/* Title for articles */}
+          {post.type === 'article' && post.title && (
+            <Heading size="xl" mb={4} color="gray.800">{post.title}</Heading>
+          )}
+
+          {/* Post content */}
+          <Text 
+            fontSize="lg" 
+            color="gray.700" 
+            whiteSpace="pre-wrap"
+            mb={6}
+          >
+            {post.body}
+          </Text>
+
+          {/* Tags and metadata */}
+          <HStack spacing={3} wrap="wrap" mb={4}>
             <Badge
               px={2}
               py={1}
-              bg="paper.100"
-              color="paper.800"
-              fontWeight="bold"
+              rounded="md"
+              bg="gray.100"
+              color="gray.600"
               textTransform="uppercase"
-              border="1px solid"
-              borderColor="paper.300"
+              fontSize="xs"
+              fontWeight="bold"
             >
               {post.type}
             </Badge>
@@ -115,52 +238,74 @@ function ViewPost() {
               <Badge
                 px={2}
                 py={1}
+                rounded="md"
                 bg="green.100"
-                color="green.800"
-                fontWeight="bold"
+                color="green.700"
                 textTransform="uppercase"
-                border="1px solid"
-                borderColor="green.300"
+                fontSize="xs"
+                fontWeight="bold"
               >
                 {post.category.name}
               </Badge>
             )}
-            {post.tags && post.tags.map((tag) => (
+            {post.type === 'article' && post.tags?.map(tag => (
               <Badge
                 key={tag}
                 px={2}
                 py={1}
-                bg="teal.100"
-                color="teal.800"
-                fontWeight="bold"
+                rounded="md"
+                bg="blue.100"
+                color="blue.700"
                 textTransform="uppercase"
-                border="1px solid"
-                borderColor="teal.300"
+                fontSize="xs"
+                fontWeight="bold"
               >
                 {tag}
               </Badge>
             ))}
           </HStack>
 
-          <Text color="paper.600" whiteSpace="pre-wrap">
-            {post.body}
-          </Text>
-
-          <HStack justify="space-between" pt={4}>
-            <Text color="paper.400">
-              By{" "}
-              <Link
-                to={`/user/${post.author.username}`}
-                style={{ textDecoration: "underline" }}
+          {/* Reactions */}
+          <HStack spacing={6} pt={2}>
+            <HStack spacing={2}>
+              <IconButton
+                icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                variant="ghost"
+                size="sm"
+                color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                aria-label="Upvote"
+                onClick={() => handleReaction('upvote')}
+                transition="transform 0.2s"
+                transform={isReactionAnimating && post.userReaction === 'upvote' ? 'scale(1.2)' : 'scale(1)'}
+              />
+              <Text 
+                color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "blue.500" : 
+                       getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : "gray.600"}
+                fontWeight="semibold"
+                transition="all 0.2s"
+                transform={isReactionAnimating ? 'scale(1.02)' : 'scale(1)'}
               >
-                {post.author.display_name}
-              </Link>
-            </Text>
-            <Text color="paper.400">
-              {new Date(post.published_at).toLocaleDateString()}
-            </Text>
+                {getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0)}
+              </Text>
+              <IconButton
+                icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                variant="ghost"
+                size="sm"
+                color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                aria-label="Downvote"
+                onClick={() => handleReaction('downvote')}
+                transition="transform 0.2s"
+                transform={isReactionAnimating && post.userReaction === 'downvote' ? 'scale(1.2)' : 'scale(1)'}
+              />
+            </HStack>
           </HStack>
-        </VStack>
+        </Box>
+
+        {/* Comments section with subtle separator */}
+        <Box px={8} py={6} bg="gray.50">
+          <Divider mb={6} />
+          <Comments postId={post.id} />
+        </Box>
       </Box>
     </Container>
   );
