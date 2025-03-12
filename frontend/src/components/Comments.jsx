@@ -1,30 +1,38 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Text, VStack, HStack, Input, Button, Avatar, IconButton, useToast, Divider, Collapse } from '@chakra-ui/react';
-import { FiMoreHorizontal, FiMessageCircle } from 'react-icons/fi';
+import { Box, Text, VStack, HStack, Input, Button, Avatar, IconButton, useToast, Divider, Collapse, Menu, MenuButton, MenuList, MenuItem } from '@chakra-ui/react';
+import { FiMoreHorizontal, FiMessageCircle, FiEdit, FiTrash2, FiFlag } from 'react-icons/fi';
 import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
-import { ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, ChevronRightIcon, WarningIcon } from '@chakra-ui/icons';
 import { commentService } from '../services/commentService';
 import useAuthState from '../hooks/useAuthState';
 import PropTypes from 'prop-types';
 import { formatDistanceToNow } from 'date-fns';
 
-const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) => {
+// Helper function to calculate net score
+const getNetScore = (upvotes = 0, downvotes = 0) => {
+  return parseInt(upvotes) - parseInt(downvotes);
+};
+
+const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, level = 0 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
-  const [isAnimating, setIsAnimating] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const toast = useToast();
-  const hasReplies = comment.replies && comment.replies.length > 0;
 
-  // No local state for reactions, use the comment prop directly
-  const getNetScore = (upvotes, downvotes) => {
-    // Ensure values are numbers with defaults
-    const up = parseInt(upvotes) || 0;
-    const down = parseInt(downvotes) || 0;
-    return up - down;
-  };
+  const isDeleted = !!comment.deleted_at;
+  const isRemoved = !!comment.removed_at;
+  const hasReplies = comment.replies && comment.replies.length > 0;
+  const hasValidReplies = comment.replies?.some(reply => !reply.deleted_at && !reply.removed_at);
+  const showDeletedContent = (isDeleted || isRemoved) && hasValidReplies;
+  const isAdmin = user?.isAdmin;
+  const isCommentOwner = user && String(user.userId) === String(comment.user_id);
+
+  // Don't render deleted comments without valid replies
+  if ((isDeleted || isRemoved) && !hasValidReplies) {
+    return null;
+  }
 
   const handleReaction = async (type) => {
     if (!user) {
@@ -36,105 +44,35 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
       return;
     }
 
-    // Store previous state for rollback in case of error
-    const previousReactions = { 
-      upvotes: parseInt(comment.reactions.upvotes) || 0,
-      downvotes: parseInt(comment.reactions.downvotes) || 0
-    };
-    const previousUserReaction = comment.userReaction;
-
-    // Start animation
-    setIsAnimating(true);
-
     try {
-      // Create updated comment state
-      const updatedComment = { ...comment };
-      if (comment.userReaction === type) {
-        // Removing reaction (toggle off)
-        updatedComment.reactions = {
-          ...updatedComment.reactions,
-          [`${type}s`]: Math.max(0, (parseInt(updatedComment.reactions[`${type}s`]) || 0) - 1)
-        };
-        updatedComment.userReaction = null;
-      } else {
-        // If there was a previous reaction, remove it
-        if (updatedComment.userReaction) {
-          updatedComment.reactions = {
-            ...updatedComment.reactions,
-            [`${updatedComment.userReaction}s`]: Math.max(0, (parseInt(updatedComment.reactions[`${updatedComment.userReaction}s`]) || 0) - 1)
-          };
-        }
-        // Add new reaction
-        updatedComment.reactions = {
-          ...updatedComment.reactions,
-          [`${type}s`]: (parseInt(updatedComment.reactions[`${type}s`]) || 0) + 1
-        };
-        updatedComment.userReaction = type;
-      }
-
-      // Update UI immediately (optimistic update)
-      onEdit(comment.id, comment.content, updatedComment);
-
-      // Send API request
+      // First get the reaction update from the server
       const result = await commentService.addReaction(comment.id, type);
-
-      // Update with server response while preserving reply structure
-      const serverUpdatedComment = {
-        ...comment,
+      // Then pass the complete reaction data to onEdit
+      onEdit(comment.id, comment.content, {
         reactions: {
-          upvotes: parseInt(result.upvotes) || 0,
-          downvotes: parseInt(result.downvotes) || 0
+          upvotes: result.upvotes,
+          downvotes: result.downvotes
         },
         userReaction: result.userReaction
-      };
-      onEdit(comment.id, comment.content, serverUpdatedComment);
-      
-    } catch (error) {
-      // Revert on error
-      console.error('Error handling reaction:', error);
-      onEdit(comment.id, comment.content, {
-        ...comment,
-        reactions: previousReactions,
-        userReaction: previousUserReaction
       });
-
+    } catch (error) {
       toast({
         title: 'Error updating reaction',
         description: error.message,
         status: 'error',
         duration: 3000,
       });
-    } finally {
-      setTimeout(() => setIsAnimating(false), 300);
     }
   };
 
-  const handleEdit = async () => {
+  const handleEdit = () => {
     if (!editContent.trim()) return;
-    try {
-      await onEdit(comment.id, editContent);
-      setIsEditing(false);
-    } catch (error) {
-      toast({
-        title: 'Error updating comment',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-      });
-    }
+    onEdit(comment.id, editContent);
+    setIsEditing(false);
   };
 
-  const handleDelete = async () => {
-    try {
-      await onDelete(comment.id);
-    } catch (error) {
-      toast({
-        title: 'Error deleting comment',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-      });
-    }
+  const handleDelete = () => {
+    onDelete(comment.id);
   };
 
   const handleReply = async () => {
@@ -153,8 +91,17 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
     }
   };
 
+  // Add handleReport function
+  const handleReport = () => {
+    toast({
+      title: 'Report button clicked',
+      description: 'This is a test of the menu functionality',
+      status: 'info',
+      duration: 3000,
+    });
+  };
+
   // Calculate indentation - max out at 8 levels deep to prevent excessive nesting
-  const effectiveLevel = Math.min(level, 8);
   const shouldShowContinuation = level > 8;
   const threadLineOffset = 32; // Base offset for thread lines
   const threadLineLeft = -threadLineOffset;
@@ -230,28 +177,55 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
           
           <Avatar
             size="sm"
-            name={comment.profiles.username}
-            src={`/avatars/${comment.profiles.avatar_name}`}
+            name={isRemoved ? "moderator" : comment.profiles.username}
+            src={isRemoved ? undefined : `/avatars/${comment.profiles.avatar_name}`}
             border="2px solid"
             borderColor="gray.200"
           />
           <Box flex={1}>
             <HStack justify="space-between" mb={2}>
               <Text fontWeight="bold">
-                @{comment.profiles.username}
+                @{isRemoved ? "moderator" : comment.profiles.username}
               </Text>
               <HStack>
                 <Text fontSize="sm" color="gray.500">
                   {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                 </Text>
-                {user && user.userId === comment.user_id && (
+                {!isDeleted && !isRemoved && user && (
+                  <Menu>
+                    <MenuButton
+                      as={IconButton}
+                      icon={<FiMoreHorizontal />}
+                      variant="ghost"
+                      size="sm"
+                      color="gray.500"
+                      aria-label="More options"
+                    />
+                    <MenuList>
+                      {isCommentOwner && (
+                        <>
+                          <MenuItem icon={<FiEdit />} onClick={() => setIsEditing(!isEditing)}>
+                            Edit
+                          </MenuItem>
+                          <MenuItem icon={<FiTrash2 />} color="red.500" onClick={handleDelete}>
+                            Delete
+                          </MenuItem>
+                        </>
+                      )}
+                      <MenuItem icon={<FiFlag />} onClick={handleReport}>
+                        Report
+                      </MenuItem>
+                    </MenuList>
+                  </Menu>
+                )}
+                {!isDeleted && !isRemoved && isAdmin && (
                   <IconButton
-                    icon={<FiMoreHorizontal />}
+                    icon={<WarningIcon />}
                     variant="ghost"
                     size="sm"
-                    color="gray.500"
-                    aria-label="More options"
-                    onClick={() => setIsEditing(!isEditing)}
+                    colorScheme="red"
+                    aria-label="Remove comment"
+                    onClick={() => onRemove(comment.id)}
                   />
                 )}
               </HStack>
@@ -272,71 +246,56 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
                     setIsEditing(false);
                     setEditContent(comment.content);
                   }}>Cancel</Button>
-                  <Button size="sm" colorScheme="red" variant="ghost" onClick={handleDelete}>Delete</Button>
                 </HStack>
               </Box>
             ) : (
-              <Text mb={2} whiteSpace="pre-wrap">{comment.content}</Text>
+              <>
+                <Text mb={2} whiteSpace="pre-wrap" color={showDeletedContent ? "gray.500" : "inherit"}>
+                  {showDeletedContent ? (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') : comment.content}
+                </Text>
+
+                {!isDeleted && !isRemoved && (
+                  <HStack spacing={3} mb={2}>
+                    {/* Reactions */}
+                    <HStack spacing={2}>
+                      <IconButton
+                        icon={comment.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                        variant="ghost"
+                        size="sm"
+                        color={comment.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                        aria-label="Upvote"
+                        onClick={() => handleReaction('upvote')}
+                      />
+                      <Text fontWeight="semibold" color={getNetScore(comment.reactions.upvotes, comment.reactions.downvotes) > 0 ? "blue.500" : "gray.600"}>
+                        {getNetScore(comment.reactions.upvotes, comment.reactions.downvotes)}
+                      </Text>
+                      <IconButton
+                        icon={comment.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                        variant="ghost"
+                        size="sm"
+                        color={comment.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                        aria-label="Downvote"
+                        onClick={() => handleReaction('downvote')}
+                      />
+                    </HStack>
+
+                    {/* Reply Button */}
+                    {user && (
+                      <Button
+                        leftIcon={<FiMessageCircle />}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsReplying(!isReplying)}
+                      >
+                        Reply
+                      </Button>
+                    )}
+                  </HStack>
+                )}
+              </>
             )}
 
-            <HStack spacing={6} mb={2}>
-              <HStack spacing={2}>
-                <IconButton
-                  icon={comment.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
-                  variant="ghost"
-                  size="sm"
-                  color={comment.userReaction === 'upvote' ? "blue.500" : "gray.600"}
-                  aria-label="Upvote"
-                  onClick={() => handleReaction('upvote')}
-                  transition="transform 0.2s"
-                  transform={isAnimating && comment.userReaction === 'upvote' ? 'scale(1.2)' : 'scale(1)'}
-                />
-                <Text 
-                  color={getNetScore(comment.reactions.upvotes, comment.reactions.downvotes) > 0 ? "blue.500" : 
-                        getNetScore(comment.reactions.upvotes, comment.reactions.downvotes) < 0 ? "red.500" : "gray.600"}
-                  fontWeight="semibold"
-                  transition="all 0.2s"
-                  transform={isAnimating ? 'scale(1.02)' : 'scale(1)'}
-                >
-                  {getNetScore(comment.reactions.upvotes, comment.reactions.downvotes)}
-                </Text>
-                <IconButton
-                  icon={comment.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
-                  variant="ghost"
-                  size="sm"
-                  color={comment.userReaction === 'downvote' ? "red.500" : "gray.600"}
-                  aria-label="Downvote"
-                  onClick={() => handleReaction('downvote')}
-                  transition="transform 0.2s"
-                  transform={isAnimating && comment.userReaction === 'downvote' ? 'scale(1.2)' : 'scale(1)'}
-                />
-              </HStack>
-              <Button
-                leftIcon={<FiMessageCircle />}
-                variant="ghost"
-                size="sm"
-                color="gray.600"
-                fontWeight="normal"
-                onClick={() => setIsReplying(!isReplying)}
-              >
-                Reply
-              </Button>
-              {hasReplies && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  color="gray.600"
-                  fontWeight="normal"
-                  onClick={() => setIsCollapsed(!isCollapsed)}
-                >
-                  {isCollapsed 
-                    ? `Show ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`
-                    : `Hide ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`
-                  }
-                </Button>
-              )}
-            </HStack>
-
+            {/* Reply Form */}
             {isReplying && (
               <Box mb={4}>
                 <Input
@@ -374,6 +333,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0 }) 
                 user={user}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onRemove={onRemove}
                 onReply={onReply}
                 level={level + 1}
               />
@@ -402,11 +362,14 @@ CommentThread.propTypes = {
       downvotes: PropTypes.number
     }),
     userReaction: PropTypes.string,
-    replies: PropTypes.array
+    replies: PropTypes.array,
+    deleted_at: PropTypes.string,
+    removed_at: PropTypes.string
   }).isRequired,
   user: PropTypes.object,
   onEdit: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
+  onRemove: PropTypes.func.isRequired,
   onReply: PropTypes.func.isRequired,
   level: PropTypes.number
 };
@@ -529,7 +492,7 @@ function Comments({ postId }) {
   const handleEdit = async (id, content, reactionUpdate) => {
     if (reactionUpdate) {
       // Handle reaction update while preserving the comment tree structure
-      setComments(prevComments => {
+      setComments(currentComments => {
         // Helper function to update a comment in the tree
         const updateCommentInTree = (comments) => {
           return comments.map(comment => {
@@ -557,15 +520,14 @@ function Comments({ postId }) {
         };
 
         // Update the entire comment tree
-        return updateCommentInTree(prevComments);
+        return updateCommentInTree(currentComments);
       });
       return;
     }
 
-    // Handle content edit
     try {
       const updatedComment = await commentService.updateComment(id, content);
-      setComments(prevComments => {
+      setComments(comments => {
         // Helper function to update comment content in the tree
         const updateCommentContentInTree = (comments) => {
           return comments.map(comment => {
@@ -589,7 +551,7 @@ function Comments({ postId }) {
           });
         };
 
-        return updateCommentContentInTree(prevComments);
+        return updateCommentContentInTree(comments);
       });
     } catch (error) {
       console.error('Error updating comment:', error);
@@ -605,13 +567,65 @@ function Comments({ postId }) {
   const handleDelete = async (id) => {
     try {
       await commentService.deleteComment(id);
-      const flatComments = flattenComments(comments);
-      const remainingComments = flatComments.filter(comment => comment.id !== id);
-      setComments(organizeComments(remainingComments));
+      
+      setComments(comments => {
+        const updateDeletedStatus = comments => {
+          return comments.map(comment => {
+            if (comment.id === id) {
+              return {
+                ...comment,
+                deleted_at: new Date().toISOString(),
+                content: '[Comment deleted by user]'
+              };
+            }
+            if (comment.replies?.length > 0) {
+              return {
+                ...comment,
+                replies: updateDeletedStatus(comment.replies)
+              };
+            }
+            return comment;
+          });
+        };
+        return updateDeletedStatus(comments);
+      });
+      
+      toast({
+        title: 'Comment deleted',
+        status: 'success',
+        duration: 2000,
+      });
     } catch (error) {
       console.error('Error deleting comment:', error);
       toast({
         title: 'Error deleting comment',
+        description: error.message,
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleRemove = async (id) => {
+    try {
+      await commentService.removeComment(id);
+      // Handle the removal in the UI
+      setComments(comments => {
+        const updatedComments = comments.map(comment => {
+          if (comment.id === id) {
+            return {
+              ...comment,
+              removed_at: new Date().toISOString()
+            };
+          }
+          return comment;
+        });
+        return organizeComments(updatedComments);
+      });
+    } catch (error) {
+      console.error('Error removing comment:', error);
+      toast({
+        title: 'Error removing comment',
         description: error.message,
         status: 'error',
         duration: 3000,
@@ -624,8 +638,7 @@ function Comments({ postId }) {
     
     try {
       const comment = await commentService.createComment(content, postId, parentId);
-      const flatComments = flattenComments(comments);
-      setComments(organizeComments([...flatComments, comment]));
+      setComments(currentComments => organizeComments([...flattenComments(currentComments), comment]));
     } catch (error) {
       console.error('Error creating reply:', error);
       toast({
@@ -663,6 +676,7 @@ function Comments({ postId }) {
             user={user}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onRemove={handleRemove}
             onReply={handleReply}
           />
         ))}

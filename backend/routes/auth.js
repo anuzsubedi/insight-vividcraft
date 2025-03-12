@@ -147,10 +147,12 @@ router.post("/login", async (req, res) => {
             message: "Login successful",
             token,
             user: {
+                userId: user.id, 
                 username: user.username,
                 email: user.email,
                 displayName: user.display_name,
-                avatarName: user.avatar_name || ""
+                avatarName: user.avatar_name || "",
+                isAdmin: user.is_admin || false
             }
         });
     } catch (error) {
