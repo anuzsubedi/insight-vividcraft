@@ -13,19 +13,27 @@ import {
   Box,
   Flex,
   Icon,
+  Divider,
+  Badge,
 } from "@chakra-ui/react"
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { CheckIcon, EmailIcon } from "@chakra-ui/icons"
+import { useState, useEffect } from "react"
+import { motion, useAnimation } from "framer-motion"
+import { EmailIcon, ArrowForwardIcon } from "@chakra-ui/icons"
 
 const MotionBox = motion(Box)
 const MotionHeading = motion(Heading)
 const MotionText = motion(Text)
-const MotionFlex = motion(Flex)
+const MotionDivider = motion(Divider)
+const MotionBadge = motion(Badge)
 
 function VerificationForm({ email, onVerify, isLoading }) {
   const [code, setCode] = useState("")
   const toast = useToast()
+  const controls = useAnimation()
+
+  useEffect(() => {
+    controls.start("visible")
+  }, [controls])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -47,92 +55,143 @@ function VerificationForm({ email, onVerify, isLoading }) {
     }
   }
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        delayChildren: 0.1,
+        staggerChildren: 0.08,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { type: "spring", stiffness: 100, damping: 20 },
+    },
+  }
+
+  const buttonVariants = {
+    hover: {
+      scale: 1.03,
+      boxShadow: "6px 6px 0 rgba(0,0,0,0.9)",
+      translateY: "-2px",
+      translateX: "-2px",
+    },
+    tap: {
+      scale: 0.98,
+      boxShadow: "2px 2px 0 rgba(0,0,0,0.9)",
+      translateY: "0px",
+      translateX: "0px",
+    },
+  }
+
+  const pulseVariants = {
+    hidden: { scale: 1 },
+    visible: {
+      scale: [1, 1.05, 1],
+      transition: {
+        duration: 2,
+        repeat: Infinity,
+        repeatType: "reverse",
+        ease: "easeInOut",
+      },
+    },
+  }
+
   return (
-    <VStack spacing={8} align="stretch">
-      <MotionFlex
-        direction="column"
-        align="center"
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <MotionBox
-          bg="accent.100"
-          color="white"
-          p={3}
-          borderRadius="full"
-          mb={4}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.5, type: "spring" }}
-        >
-          <Icon as={EmailIcon} boxSize={8} />
-        </MotionBox>
+    <VStack
+      spacing={8}
+      align="stretch"
+      as={motion.div}
+      variants={containerVariants}
+      initial="hidden"
+      animate={controls}
+    >
+      <MotionBox textAlign="center" variants={itemVariants}>
+        <Flex justify="center" mb={6}>
+          <MotionBox
+            bg="teal.50"
+            color="teal.500"
+            p={4}
+            borderRadius="full"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            boxShadow="md"
+            variants={pulseVariants}
+            animate="visible"
+          >
+            <Icon as={EmailIcon} boxSize={6} />
+          </MotionBox>
+        </Flex>
 
         <MotionHeading
-          fontSize="4xl"
-          fontWeight="black"
-          color="paper.500"
-          textAlign="center"
-          textTransform="uppercase"
-          letterSpacing="wide"
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1, duration: 0.5 }}
+          as="h2"
+          size="xl"
+          mb={3}
+          bgGradient="linear(to-r, teal.400, teal.600)"
+          bgClip="text"
+          variants={itemVariants}
         >
-          Verify Your Email
+          Verify your email
         </MotionHeading>
 
-        <MotionText
-          color="paper.400"
-          fontSize="lg"
-          textAlign="center"
-          fontFamily="heading"
-          mt={2}
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-        >
+        <MotionText color="gray.600" mb={2} variants={itemVariants}>
           Enter the 6-digit code sent to:
         </MotionText>
 
-        <MotionText
-          color="accent.100"
-          fontSize="lg"
-          fontWeight="bold"
-          textAlign="center"
-          fontFamily="heading"
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
-        >
+        <MotionText fontWeight="bold" color="teal.500" mb={6} variants={itemVariants}>
           {email}
         </MotionText>
-      </MotionFlex>
+      </MotionBox>
+
+      <MotionDivider variants={itemVariants} />
 
       <form onSubmit={handleSubmit}>
         <VStack spacing={8}>
-          <MotionBox
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
-            width="100%"
-          >
-            <HStack justifyContent="center" spacing={{ base: 2, md: 4 }}>
-              <PinInput size="lg" value={code} onChange={setCode} type="number" otp isDisabled={isLoading}>
+          <MotionBox w="full" variants={itemVariants}>
+            <MotionBadge
+              colorScheme="teal"
+              fontSize="sm"
+              mb={4}
+              px={3}
+              py={1}
+              borderRadius="full"
+              mx="auto"
+              display="block"
+              textAlign="center"
+              width="fit-content"
+              variants={itemVariants}
+            >
+              Verification Code
+            </MotionBadge>
+            <HStack justify="center" spacing={{ base: 2, md: 3 }}>
+              <PinInput
+                size="lg"
+                value={code}
+                onChange={setCode}
+                type="number"
+                otp
+                isDisabled={isLoading}
+                focusBorderColor="teal.400"
+              >
                 {[...Array(6)].map((_, i) => (
                   <PinInputField
                     key={i}
-                    bg="paper.50"
-                    border="3px solid"
-                    borderColor="paper.400"
-                    borderRadius="md"
-                    fontSize="xl"
-                    _hover={{ borderColor: "accent.100" }}
+                    bg="gray.50"
+                    borderColor="gray.300"
+                    _hover={{ borderColor: "teal.300" }}
                     _focus={{
-                      borderColor: "accent.100",
-                      boxShadow: "5px 5px 0 black",
+                      borderColor: "teal.400",
+                      boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
                     }}
+                    fontSize="xl"
                     width={{ base: "40px", md: "50px" }}
                     height={{ base: "50px", md: "60px" }}
                   />
@@ -141,55 +200,59 @@ function VerificationForm({ email, onVerify, isLoading }) {
             </HStack>
           </MotionBox>
 
-          <MotionBox
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
-            width="100%"
-          >
+          {/* Neo-brutalist Button */}
+          <MotionBox w="full" variants={itemVariants}>
             <Button
               type="submit"
               width="full"
-              size="lg"
-              height="65px"
-              bg="accent.100"
+              bg="teal.500"
               color="white"
-              fontSize="lg"
-              fontWeight="black"
-              border="3px solid black"
-              borderRadius="md"
-              boxShadow="6px 6px 0 black"
-              _hover={{
-                bg: "accent.200",
-                transform: "translate(-3px, -3px)",
-                boxShadow: "9px 9px 0 black",
-              }}
-              _active={{
-                bg: "accent.300",
-                transform: "translate(0px, 0px)",
-                boxShadow: "0px 0px 0 black",
-              }}
-              rightIcon={<CheckIcon />}
+              height="56px"
+              fontSize="md"
+              fontWeight="bold"
+              border="2px solid black"
+              boxShadow="4px 4px 0 black"
+              _hover={{}}
+              _active={{}}
               isLoading={isLoading}
-              loadingText="VERIFYING..."
+              loadingText="Verifying..."
               isDisabled={code.length !== 6 || isLoading}
-              textTransform="uppercase"
-              transition="all 0.2s"
+              rightIcon={<ArrowForwardIcon />}
+              as={motion.button}
+              variants={buttonVariants}
+              whileHover="hover"
+              whileTap="tap"
+              transition={{ duration: 0.1 }}
             >
-              Verify Email
+              Verify email
             </Button>
           </MotionBox>
 
-          <MotionBox initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6, duration: 0.5 }}>
-            <Text fontSize="sm" color="paper.400" textAlign="center">
+          <MotionBox textAlign="center" variants={itemVariants}>
+            <Text fontSize="sm" color="gray.600">
               Didn&apos;t receive a code?{" "}
-              <Button variant="link" color="accent.100" fontWeight="bold" _hover={{ color: "accent.200" }}>
+              <Button
+                variant="link"
+                color="teal.500"
+                fontWeight="bold"
+                size="sm"
+                _hover={{ color: "teal.600", textDecoration: "none" }}
+              >
                 Resend
               </Button>
             </Text>
           </MotionBox>
         </VStack>
       </form>
+
+      <MotionBox mt={6} textAlign="center" variants={itemVariants}>
+        <Text fontSize="sm" color="gray.500">
+          Having trouble? Contact{" "}
+          <Button as="a" href="mailto:support@example.com" variant="link" color="teal.500" size="sm">
+            support@example.com
+          </Button>
+        </Text>
+      </MotionBox>
     </VStack>
   )
 }
@@ -201,4 +264,3 @@ VerificationForm.propTypes = {
 }
 
 export default VerificationForm
-

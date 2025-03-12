@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Box,
@@ -18,19 +18,26 @@ import {
   InputRightElement,
   Icon,
   Flex,
+  HStack,
   Grid,
   GridItem,
+  Divider,
+  useColorModeValue,
+  Badge,
 } from "@chakra-ui/react"
 import { Link } from "react-router-dom"
-import { ViewIcon, ViewOffIcon, CheckIcon } from "@chakra-ui/icons"
-import { motion } from "framer-motion"
+import { ViewIcon, ViewOffIcon, ArrowForwardIcon, } from "@chakra-ui/icons"
+import { motion, useAnimation } from "framer-motion"
 import { authService } from "../services/authService"
 import VerificationForm from "../components/VerificationForm"
 import Logo from "../components/Logo"
 
 const MotionBox = motion(Box)
-const MotionText = motion(Text)
+const MotionFlex = motion(Flex)
 const MotionHeading = motion(Heading)
+const MotionText = motion(Text)
+const MotionDivider = motion(Divider)
+const MotionBadge = motion(Badge)
 
 function Signup() {
   const navigate = useNavigate()
@@ -46,6 +53,11 @@ function Signup() {
   const [isLoading, setIsLoading] = useState(false)
   const [verificationSent, setVerificationSent] = useState(false)
   const toast = useToast()
+  const controls = useAnimation()
+
+  useEffect(() => {
+    controls.start("visible")
+  }, [controls])
 
   const validateForm = () => {
     const newErrors = {}
@@ -99,7 +111,7 @@ function Signup() {
 
       setVerificationSent(true)
       toast({
-        title: "CHECK YOUR EMAIL!",
+        title: "Check your email",
         description: "We've sent you a verification code. Please check your inbox.",
         status: "success",
         duration: 5000,
@@ -108,7 +120,7 @@ function Signup() {
     } catch (error) {
       console.error("[SIGNUP] Error:", error)
       toast({
-        title: "ERROR CREATING ACCOUNT",
+        title: "Error creating account",
         description: error.response?.data?.error || "Something went wrong",
         status: "error",
         duration: 5000,
@@ -124,7 +136,7 @@ function Signup() {
     try {
       await authService.verifyEmail(formData.email, code)
       toast({
-        title: "SUCCESS!",
+        title: "Success!",
         description: "Your account has been created successfully!",
         status: "success",
         duration: 3000,
@@ -135,7 +147,7 @@ function Signup() {
     } catch (error) {
       console.error("[VERIFY] Error:", error)
       toast({
-        title: "VERIFICATION FAILED",
+        title: "Verification failed",
         description: error.response?.data?.error || "Please try again",
         status: "error",
         duration: 5000,
@@ -161,381 +173,399 @@ function Signup() {
     }
   }
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        delayChildren: 0.1,
+        staggerChildren: 0.08,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { type: "spring", stiffness: 100, damping: 20 },
+    },
+  }
+
+  const buttonVariants = {
+    hover: {
+      scale: 1.03,
+      boxShadow: "6px 6px 0 rgba(0,0,0,0.9)",
+      translateY: "-2px",
+      translateX: "-2px",
+    },
+    tap: {
+      scale: 0.98,
+      boxShadow: "2px 2px 0 rgba(0,0,0,0.9)",
+      translateY: "0px",
+      translateX: "0px",
+    },
+  }
+
+  const bgGradient = useColorModeValue(
+    "linear(to-br, gray.50, teal.50, blue.50)",
+    "linear(to-br, gray.900, teal.900, blue.900)"
+  )
+
   if (verificationSent) {
     return (
-      <MotionBox
+      <Box
         minH="100vh"
-        bg="paper.50"
-        py={{ base: 8, md: 16 }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
+        bgGradient={bgGradient}
         position="relative"
         overflow="hidden"
+        py={{ base: 10, md: 0 }}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
       >
-        <Container maxW="md">
+        {/* Decorative circles */}
+        <Box
+          position="absolute"
+          top="10%"
+          left="5%"
+          width="200px"
+          height="200px"
+          borderRadius="full"
+          bgGradient="linear(to-r, teal.200, teal.100)"
+          opacity="0.4"
+          zIndex={0}
+        />
+        
+        <Box
+          position="absolute"
+          bottom="10%"
+          right="5%"
+          width="300px"
+          height="300px"
+          borderRadius="full"
+          bgGradient="linear(to-l, blue.100, teal.100)"
+          opacity="0.3"
+          zIndex={0}
+        />
+
+        <Container maxW="md" py={{ base: 10, md: 20 }} position="relative" zIndex={1}>
           <MotionBox
             bg="white"
-            p={8}
-            border="4px solid black"
-            boxShadow="12px 12px 0 black"
-            borderRadius="md"
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6 }}
+            p={{ base: 8, md: 12 }}
+            rounded="xl"
+            boxShadow="2xl"
+            borderTop="6px solid"
+            borderColor="teal.400"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
           >
             <VerificationForm email={formData.email} onVerify={handleVerification} isLoading={isLoading} />
           </MotionBox>
         </Container>
-      </MotionBox>
+      </Box>
     )
   }
 
   return (
-    <MotionBox
+    <Box
       minH="100vh"
-      bg="paper.50"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.6 }}
+      bgGradient={bgGradient}
       position="relative"
       overflow="hidden"
+      py={{ base: 10, md: 0 }}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
     >
-      {/* Background pattern */}
+      {/* Decorative circles */}
       <Box
         position="absolute"
-        top={0}
-        left={0}
-        right={0}
-        bottom={0}
-        bgImage="repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(0,0,0,0.02) 20px, rgba(0,0,0,0.02) 40px)"
+        top="10%"
+        left="5%"
+        width="200px"
+        height="200px"
+        borderRadius="full"
+        bgGradient="linear(to-r, teal.200, teal.100)"
+        opacity="0.4"
         zIndex={0}
       />
-
-      {/* Decorative elements */}
-      <MotionBox
-        position="absolute"
-        top="15%"
-        left="5%"
-        width="150px"
-        height="150px"
-        borderRadius="50%"
-        bg="accent.100"
-        opacity={0.1}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 0.8, delay: 0.2 }}
-      />
-
-      <MotionBox
+      
+      <Box
         position="absolute"
         bottom="10%"
         right="5%"
-        width="200px"
-        height="200px"
-        borderRadius="50%"
-        bg="accent.100"
-        opacity={0.1}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 0.8, delay: 0.4 }}
+        width="300px"
+        height="300px"
+        borderRadius="full"
+        bgGradient="linear(to-l, blue.100, teal.100)"
+        opacity="0.3"
+        zIndex={0}
       />
 
-      <Container maxW="container.xl" py={{ base: 8, md: 16 }} position="relative" zIndex={1}>
-        <Grid
-          templateColumns={{ base: "1fr", lg: "1fr 1fr" }}
-          gap={0}
+      <Container maxW="xl" py={{ base: 10, md: 20 }} position="relative" zIndex={1}>
+        <MotionFlex
+          direction="column"
           bg="white"
-          border="4px solid black"
-          boxShadow="12px 12px 0 black"
+          p={{ base: 8, md: 12 }}
+          rounded="xl"
+          boxShadow="2xl"
+          borderTop="6px solid"
+          borderColor="teal.400"
           overflow="hidden"
-          transform="rotate(1deg)"
-          as={motion.div}
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          position="relative"
+          variants={containerVariants}
+          initial="hidden"
+          animate={controls}
         >
-          {/* Left Column - Branding */}
-          <GridItem
-            bg="accent.100"
-            p={{ base: 8, md: 12 }}
-            display="flex"
-            flexDirection="column"
-            justifyContent="center"
-            alignItems="center"
-            textAlign="center"
-            position="relative"
-            overflow="hidden"
-          >
-            {/* Decorative elements */}
-            <Box position="absolute" top="20px" right="20px" width="40px" height="40px" border="3px solid white" />
+          {/* Decorative corner accent */}
+          <Box
+            position="absolute"
+            top="0"
+            right="0"
+            width="120px"
+            height="120px"
+            bgGradient="linear(to-br, teal.50, blue.50)"
+            transform="translate(60px, -60px) rotate(45deg)"
+            zIndex={0}
+          />
 
-            <Box position="absolute" bottom="20px" left="20px" width="40px" height="40px" border="3px solid white" />
-
-            <MotionBox
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              mb={8}
-            >
-              <Logo size="4xl" color="white" />
-            </MotionBox>
-
+          <MotionBox textAlign="center" mb={8} zIndex={1} variants={itemVariants}>
+            <Logo size="xl" mb={6} />
             <MotionHeading
-              color="white"
-              size="2xl"
-              fontWeight="black"
-              textTransform="uppercase"
-              letterSpacing="wider"
-              mb={6}
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
+              as="h1"
+              size="xl"
+              mb={3}
+              bgGradient="linear(to-r, teal.400, teal.600)"
+              bgClip="text"
+              variants={itemVariants}
             >
-              Join The Community
+              Join our community
             </MotionHeading>
-
-            <MotionText
-              color="whiteAlpha.900"
-              fontSize="xl"
-              maxW="md"
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-            >
-              Start your creative journey today
+            <MotionText color="gray.600" variants={itemVariants}>
+              Create an account to share quick thoughts or deep dives
             </MotionText>
+          </MotionBox>
 
-            {/* Decorative zigzag */}
-            <Flex justify="center" mt={12}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Box
-                  key={i}
-                  as={motion.div}
-                  height="6px"
-                  width="30px"
-                  bg="white"
-                  mx={1}
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 0.3, delay: 0.7 + i * 0.1 }}
-                />
-              ))}
-            </Flex>
-          </GridItem>
+          <MotionDivider mb={8} variants={itemVariants} />
 
-          {/* Right Column - Form */}
-          <GridItem p={{ base: 6, md: 10 }} overflowY="auto" maxH={{ base: "auto", lg: "700px" }}>
-            <VStack spacing={6} align="stretch">
-              <MotionBox
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
+          <VStack as="form" onSubmit={handleSubmit} spacing={8} w="full" position="relative" zIndex={1}>
+            <MotionBox w="full" variants={itemVariants}>
+              <MotionBadge
+                colorScheme="teal"
+                fontSize="sm"
+                mb={4}
+                px={3}
+                py={1}
+                borderRadius="full"
+                variants={itemVariants}
               >
-                <Heading as="h2" size="xl" color="paper.500" fontWeight="black" mb={2}>
-                  CREATE ACCOUNT
-                </Heading>
-                <Text color="paper.400">Fill in your details to get started</Text>
-              </MotionBox>
-
-              <MotionBox
-                as="form"
-                onSubmit={handleSubmit}
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-              >
-                <VStack spacing={5} align="stretch">
-                  <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={5}>
-                    <GridItem>
-                      <FormControl isInvalid={errors.username}>
-                        <FormLabel fontWeight="bold">Username</FormLabel>
-                        <Input
-                          name="username"
-                          value={formData.username}
-                          onChange={handleChange}
-                          size="lg"
-                          bg="paper.50"
-                          border="3px solid"
-                          borderColor="paper.400"
-                          borderRadius="md"
-                          _focus={{
-                            borderColor: "accent.100",
-                            boxShadow: "5px 5px 0 black",
-                          }}
-                          _hover={{
-                            borderColor: "paper.500",
-                          }}
-                        />
-                        <FormErrorMessage>{errors.username}</FormErrorMessage>
-                      </FormControl>
-                    </GridItem>
-
-                    <GridItem>
-                      <FormControl isInvalid={errors.displayName}>
-                        <FormLabel fontWeight="bold">Display Name</FormLabel>
-                        <Input
-                          name="displayName"
-                          value={formData.displayName}
-                          onChange={handleChange}
-                          size="lg"
-                          bg="paper.50"
-                          border="3px solid"
-                          borderColor="paper.400"
-                          borderRadius="md"
-                          _focus={{
-                            borderColor: "accent.100",
-                            boxShadow: "5px 5px 0 black",
-                          }}
-                          _hover={{
-                            borderColor: "paper.500",
-                          }}
-                        />
-                        <FormErrorMessage>{errors.displayName}</FormErrorMessage>
-                      </FormControl>
-                    </GridItem>
-                  </Grid>
-
-                  <FormControl isInvalid={errors.email}>
-                    <FormLabel fontWeight="bold">Email Address</FormLabel>
+                Account Information
+              </MotionBadge>
+              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={6} w="full">
+                <GridItem>
+                  <FormControl isInvalid={errors.username}>
+                    <FormLabel fontWeight="medium">Username</FormLabel>
                     <Input
-                      name="email"
-                      type="email"
-                      value={formData.email}
+                      name="username"
+                      value={formData.username}
                       onChange={handleChange}
                       size="lg"
-                      bg="paper.50"
-                      border="3px solid"
-                      borderColor="paper.400"
-                      borderRadius="md"
+                      bg="gray.50"
+                      borderColor="gray.300"
+                      _hover={{ borderColor: "teal.300" }}
                       _focus={{
-                        borderColor: "accent.100",
-                        boxShadow: "5px 5px 0 black",
+                        borderColor: "teal.400",
+                        boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
                       }}
-                      _hover={{
-                        borderColor: "paper.500",
-                      }}
+                      pl={4}
                     />
-                    <FormErrorMessage>{errors.email}</FormErrorMessage>
+                    <FormErrorMessage>{errors.username}</FormErrorMessage>
                   </FormControl>
+                </GridItem>
 
+                <GridItem>
+                  <FormControl isInvalid={errors.displayName}>
+                    <FormLabel fontWeight="medium">Display Name</FormLabel>
+                    <Input
+                      name="displayName"
+                      value={formData.displayName}
+                      onChange={handleChange}
+                      size="lg"
+                      bg="gray.50"
+                      borderColor="gray.300"
+                      _hover={{ borderColor: "teal.300" }}
+                      _focus={{
+                        borderColor: "teal.400",
+                        boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
+                      }}
+                      pl={4}
+                    />
+                    <FormErrorMessage>{errors.displayName}</FormErrorMessage>
+                  </FormControl>
+                </GridItem>
+              </Grid>
+            </MotionBox>
+
+            <FormControl isInvalid={errors.email} as={motion.div} variants={itemVariants}>
+              <FormLabel fontWeight="medium">Email Address</FormLabel>
+              <Input
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                size="lg"
+                bg="gray.50"
+                borderColor="gray.300"
+                _hover={{ borderColor: "teal.300" }}
+                _focus={{
+                  borderColor: "teal.400",
+                  boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
+                }}
+                pl={4}
+              />
+              <FormErrorMessage>{errors.email}</FormErrorMessage>
+            </FormControl>
+
+            <MotionBox w="full" variants={itemVariants}>
+              <MotionBadge
+                colorScheme="teal"
+                fontSize="sm"
+                mb={4}
+                px={3}
+                py={1}
+                borderRadius="full"
+                variants={itemVariants}
+              >
+                Security
+              </MotionBadge>
+              <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={6} w="full">
+                <GridItem>
                   <FormControl isInvalid={errors.password}>
-                    <FormLabel fontWeight="bold">Password</FormLabel>
+                    <FormLabel fontWeight="medium">Password</FormLabel>
                     <InputGroup size="lg">
                       <Input
                         name="password"
                         type={showPassword ? "text" : "password"}
                         value={formData.password}
                         onChange={handleChange}
-                        bg="paper.50"
-                        border="3px solid"
-                        borderColor="paper.400"
-                        borderRadius="md"
+                        bg="gray.50"
+                        borderColor="gray.300"
+                        _hover={{ borderColor: "teal.300" }}
                         _focus={{
-                          borderColor: "accent.100",
-                          boxShadow: "5px 5px 0 black",
+                          borderColor: "teal.400",
+                          boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
                         }}
-                        _hover={{
-                          borderColor: "paper.500",
-                        }}
+                        pl={4}
                       />
                       <InputRightElement>
                         <Icon
                           as={showPassword ? ViewOffIcon : ViewIcon}
                           cursor="pointer"
                           onClick={() => setShowPassword(!showPassword)}
+                          color="gray.500"
                         />
                       </InputRightElement>
                     </InputGroup>
                     <FormErrorMessage>{errors.password}</FormErrorMessage>
                   </FormControl>
+                </GridItem>
 
+                <GridItem>
                   <FormControl isInvalid={errors.confirmPassword}>
-                    <FormLabel fontWeight="bold">Confirm Password</FormLabel>
+                    <FormLabel fontWeight="medium">Confirm Password</FormLabel>
                     <InputGroup size="lg">
                       <Input
                         name="confirmPassword"
                         type={showPassword ? "text" : "password"}
                         value={formData.confirmPassword}
                         onChange={handleChange}
-                        bg="paper.50"
-                        border="3px solid"
-                        borderColor="paper.400"
-                        borderRadius="md"
+                        bg="gray.50"
+                        borderColor="gray.300"
+                        _hover={{ borderColor: "teal.300" }}
                         _focus={{
-                          borderColor: "accent.100",
-                          boxShadow: "5px 5px 0 black",
+                          borderColor: "teal.400",
+                          boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
                         }}
-                        _hover={{
-                          borderColor: "paper.500",
-                        }}
+                        pl={4}
                       />
                       <InputRightElement>
                         <Icon
                           as={showPassword ? ViewOffIcon : ViewIcon}
                           cursor="pointer"
                           onClick={() => setShowPassword(!showPassword)}
+                          color="gray.500"
                         />
                       </InputRightElement>
                     </InputGroup>
                     <FormErrorMessage>{errors.confirmPassword}</FormErrorMessage>
                   </FormControl>
+                </GridItem>
+              </Grid>
+            </MotionBox>
 
-                  <Button
-                    type="submit"
-                    size="lg"
-                    height="65px"
-                    bg="accent.100"
-                    color="white"
-                    fontWeight="black"
-                    fontSize="lg"
-                    textTransform="uppercase"
-                    border="3px solid black"
-                    borderRadius="md"
-                    boxShadow="6px 6px 0 black"
-                    _hover={{
-                      bg: "accent.200",
-                      transform: "translate(-3px, -3px)",
-                      boxShadow: "9px 9px 0 black",
-                    }}
-                    _active={{
-                      bg: "accent.300",
-                      transform: "translate(0px, 0px)",
-                      boxShadow: "0px 0px 0 black",
-                    }}
-                    rightIcon={<CheckIcon />}
-                    isLoading={isLoading}
-                    loadingText="CREATING ACCOUNT..."
-                    transition="all 0.2s"
-                    mt={2}
-                  >
-                    Create Account
-                  </Button>
+            {/* Neo-brutalist Button */}
+            <MotionBox w="full" variants={itemVariants}>
+              <Button
+                type="submit"
+                size="lg"
+                width="full"
+                bg="teal.500"
+                color="white"
+                height="56px"
+                fontSize="md"
+                fontWeight="bold"
+                border="2px solid black"
+                boxShadow="4px 4px 0 black"
+                _hover={{}}
+                _active={{}}
+                isLoading={isLoading}
+                loadingText="Creating account..."
+                rightIcon={<ArrowForwardIcon />}
+                as={motion.button}
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+                transition={{ duration: 0.1 }}
+              >
+                Create account
+              </Button>
+            </MotionBox>
 
-                  <Flex justify="center" align="center" mt={4}>
-                    <Text color="paper.400">
-                      Already have an account?{" "}
-                      <Button
-                        as={Link}
-                        to="/login"
-                        variant="link"
-                        color="accent.100"
-                        fontWeight="bold"
-                        _hover={{ textDecoration: "none", color: "accent.200" }}
-                      >
-                        Sign In
-                      </Button>
-                    </Text>
-                  </Flex>
-                </VStack>
-              </MotionBox>
-            </VStack>
-          </GridItem>
-        </Grid>
+            <HStack w="full" justify="center" spacing={1} as={motion.div} variants={itemVariants}>
+              <Text color="gray.600">Already have an account?</Text>
+              <Button
+                as={Link}
+                to="/login"
+                variant="link"
+                color="teal.500"
+                fontWeight="bold"
+                _hover={{ color: "teal.600" }}
+              >
+                Sign in
+              </Button>
+            </HStack>
+          </VStack>
+
+          <MotionBox mt={10} textAlign="center" variants={itemVariants}>
+            <Text fontSize="sm" color="gray.500">
+              By creating an account, you agree to our{" "}
+              <Button as={Link} to="/terms" variant="link" color="teal.500" size="sm">
+                Terms
+              </Button>{" "}
+              and{" "}
+              <Button as={Link} to="/privacy" variant="link" color="teal.500" size="sm">
+                Privacy Policy
+              </Button>
+            </Text>
+          </MotionBox>
+        </MotionFlex>
       </Container>
-    </MotionBox>
+    </Box>
   )
 }
 
 export default Signup
-
