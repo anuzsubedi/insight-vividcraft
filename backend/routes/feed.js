@@ -317,155 +317,123 @@ router.get('/network', authMiddleware, async (req, res) => {
 });
 
 // Get explore feed (posts from selected categories)
-router.get('/explore', auth.optional, async (req, res) => {
+router.get('/explore', authMiddleware, async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const period = req.query.period || 'day';
-        const sort = req.query.sort || 'hot';
-        const categories = req.query.categories ? req.query.categories.split(',') : [];
+        const { user } = req;
+        const { page = 1, limit = 10, categories } = req.query;
+        const offset = (page - 1) * limit;
+        const categoryIds = categories ? categories.split(',') : [];
 
-        let dateFilter = {};
-        const now = new Date();
+        // Get available categories if none specified
+        if (!categories) {
+            const { data: availableCategories, error: categoryError } = await supabase
+                .from('categories')
+                .select('id, name')
+                .order('name');
 
-        switch (period) {
-            case 'day':
-                dateFilter = { published_at: { $gte: new Date(now - 24 * 60 * 60 * 1000) } };
-                break;
-            case 'week':
-                dateFilter = { published_at: { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) } };
-                break;
-            case 'month':
-                dateFilter = { published_at: { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) } };
-                break;
-            case 'year':
-                dateFilter = { published_at: { $gte: new Date(now - 365 * 24 * 60 * 60 * 1000) } };
-                break;
-            default:
-                dateFilter = {};
-        }
+            if (categoryError) throw categoryError;
 
-        const query = {
-            ...dateFilter,
-            ...(categories.length > 0 ? { category_id: { $in: categories } } : {})
-        };
+            // Get muted users
+            const { data: mutedUsers, error: mutedError } = await supabase
+                .from('mutes')
+                .select('muted_id')
+                .eq('user_id', user.userId);
 
-        let sortOption = {};
-        switch (sort) {
-            case 'hot':
-                sortOption = { score: -1, published_at: -1 };
-                break;
-            case 'new':
-                sortOption = { published_at: -1 };
-                break;
-            case 'top':
-                sortOption = { upvotes: -1, published_at: -1 };
-                break;
-            default:
-                sortOption = { published_at: -1 };
-        }
+            if (mutedError) throw mutedError;
 
-        const [posts, total] = await Promise.all([
-            Post.find(query)
-                .sort(sortOption)
-                .skip((page - 1) * limit)
-                .limit(limit)
-                .populate('author')
-                .populate('category')
-                .populate('reactions')
-                .lean(),
-            Post.countDocuments(query)
-        ]);
+            const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
 
-        // Include reaction data and comment count
-        const postsWithMetadata = posts.map(post => ({
-            ...post,
-            userReaction: req.user ? 
-                post.reactions.find(r => r.user_id.equals(req.user.id))?.type : 
-                null,
-            reactions: {
-                upvotes: post.reactions.filter(r => r.type === 'upvote').length,
-                downvotes: post.reactions.filter(r => r.type === 'downvote').length
+            let query = supabase
+                .from('posts')
+                .select(`
+                    *,
+                    author:users (
+                        username,
+                        display_name,
+                        avatar_name
+                    ),
+                    category:categories (
+                        id,
+                        name
+                    )
+                `)
+                .eq('status', 'published');
+
+            if (mutedIds.length > 0) {
+                query = query.filter('author_id', 'not.in', `(${mutedIds.join(',')})`);
             }
-        }));
 
-        res.json({
-            posts: postsWithMetadata,
-            pagination: {
-                page,
-                limit,
-                total,
-                hasMore: page * limit < total
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+            const { data: posts, error } = await query
+                .order('published_at', { ascending: false })
+                .range(offset, offset + limit - 1);
 
-router.get('/hot', auth.optional, async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const period = req.query.period || 'day';
-        const categories = req.query.categories ? req.query.categories.split(',') : [];
+            if (error) throw error;
 
-        let dateFilter = {};
-        const now = new Date();
+            // Add reactions to posts
+            const postsWithReactions = await addReactionsToPosts(posts || [], user.userId);
 
-        switch (period) {
-            case 'day':
-                dateFilter = { published_at: { $gte: new Date(now - 24 * 60 * 60 * 1000) } };
-                break;
-            case 'week':
-                dateFilter = { published_at: { $gte: new Date(now - 7 * 24 * 60 * 60 * 1000) } };
-                break;
-            case 'month':
-                dateFilter = { published_at: { $gte: new Date(now - 30 * 24 * 60 * 60 * 1000) } };
-                break;
-            case 'year':
-                dateFilter = { published_at: { $gte: new Date(now - 365 * 24 * 60 * 60 * 1000) } };
-                break;
-            case 'all':
-                dateFilter = {};
-                break;
+            return res.json({
+                posts: postsWithReactions,
+                categories: availableCategories,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    hasMore: posts.length === parseInt(limit)
+                }
+            });
         }
 
-        const query = {
-            ...dateFilter,
-            ...(categories.length > 0 ? { category_id: { $in: categories } } : {})
-        };
+        // Get muted users for category-filtered explore
+        const { data: mutedUsers, error: mutedError } = await supabase
+            .from('mutes')
+            .select('muted_id')
+            .eq('user_id', user.userId);
 
-        const [posts, total] = await Promise.all([
-            Post.find(query)
-                .sort({ score: -1 })
-                .skip((page - 1) * limit)
-                .limit(limit)
-                .populate('author')
-                .populate('category')
-                .populate('reactions')
-                .lean(),
-            Post.countDocuments(query)
-        ]);
+        if (mutedError) throw mutedError;
 
-        const postsWithReactions = posts.map(post => ({
-            ...post,
-            userReaction: req.user ? 
-                post.reactions.find(r => r.user_id.equals(req.user.id))?.type : 
-                null
-        }));
+        const mutedIds = mutedUsers?.map(m => m.muted_id) || [];
+
+        let query = supabase
+            .from('posts')
+            .select(`
+                *,
+                author:users (
+                    username,
+                    display_name,
+                    avatar_name
+                ),
+                category:categories (
+                    id,
+                    name
+                )
+            `)
+            .eq('status', 'published')
+            .in('category_id', categoryIds);
+
+        if (mutedIds.length > 0) {
+            query = query.filter('author_id', 'not.in', `(${mutedIds.join(',')})`);
+        }
+
+        const { data: posts, error } = await query
+            .order('published_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+
+        // Add reactions to posts
+        const postsWithReactions = await addReactionsToPosts(posts || [], user.userId);
 
         res.json({
             posts: postsWithReactions,
             pagination: {
-                page,
-                limit,
-                total,
-                hasMore: page * limit < total
+                page: parseInt(page),
+                limit: parseInt(limit),
+                hasMore: posts.length === parseInt(limit)
             }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Feed error:', error);
+        res.status(500).json({ error: error.message || 'Internal server error' });
     }
 });
 
