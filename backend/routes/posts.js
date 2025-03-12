@@ -1,6 +1,6 @@
 import express from "express";
 import { supabase } from "../config/supabaseClient.js";
-import { verifyToken } from "../middleware/authMiddleware.js";
+import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
@@ -156,10 +156,12 @@ async function getPostReactionsWithUser(postId, userId) {
 }
 
 // Get post by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.userId;
+        
+        console.log('Get post request with auth state:', { userId: userId || 'anonymous' });
 
         const { data: post, error } = await supabase
             .from('posts')
@@ -652,10 +654,13 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
 });
 
 // Get reactions for a post
-router.get('/:id/reactions', async (req, res) => {
+router.get('/:id/reactions', optionalAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.userId;
+        
+        console.log('Get post reactions request with auth state:', { userId: userId || 'anonymous' });
+        
         const reactions = await getPostReactionsWithUser(id, userId);
         res.json(reactions);
     } catch (error) {

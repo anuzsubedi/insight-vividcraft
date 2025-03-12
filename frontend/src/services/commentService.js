@@ -106,11 +106,29 @@ const getReactions = async (commentId) => {
   }
 };
 
+const removeComment = async (id) => {
+  try {
+    console.log('[commentService] Removing comment:', id);
+    const response = await api.post(`/api/comments/${id}/remove`);
+    console.log('[commentService] Comment removed:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('[commentService] Error removing comment:', {
+      id,
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    throw error;
+  }
+};
+
 export const commentService = {
   getComments,
   createComment,
   updateComment,
   deleteComment,
   addReaction,
-  getReactions
+  getReactions,
+  removeComment
 };

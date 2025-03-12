@@ -16,24 +16,41 @@ export default function AuthProvider({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Skip validation for public routes
+    if (publicRoutes.includes(location.pathname)) {
+      return;
+    }
+
     const validateSession = async () => {
       try {
         const isValid = await authService.validateSession();
-        if (!isValid && !publicRoutes.includes(location.pathname)) {
+        if (!isValid) {
           logout();
-          navigate("/login");
+          // Use replace to avoid building up history
+          navigate("/login", { 
+            replace: true,
+            state: { from: location.pathname }
+          });
         }
       } catch (error) {
         console.error("Session validation error:", error);
+        logout();
+        navigate("/login", { 
+          replace: true,
+          state: { from: location.pathname }
+        });
       }
     };
 
-    if (!isAuthenticated && !publicRoutes.includes(location.pathname)) {
-      navigate("/login");
-    } else if (isAuthenticated) {
+    if (!isAuthenticated) {
+      navigate("/login", { 
+        replace: true,
+        state: { from: location.pathname }
+      });
+    } else {
       validateSession();
     }
-  }, [location.pathname]);
+  }, [location.pathname, isAuthenticated, navigate, logout, user]);
 
   return children;
 }
