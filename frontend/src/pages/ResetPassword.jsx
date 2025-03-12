@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+"use client"
+
+import { useState } from "react"
+import { useNavigate, useLocation, Link } from "react-router-dom"
 import {
   Box,
   Button,
@@ -9,88 +11,75 @@ import {
   FormErrorMessage,
   Heading,
   Input,
+  Text,
   VStack,
   useToast,
+  Flex,
+  Divider,
+  useColorModeValue,
   InputGroup,
   InputRightElement,
-} from "@chakra-ui/react";
-import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
-import { authService } from "../services/authService";
+  Icon,
+  List,
+  ListItem,
+  ListIcon,
+  HStack,
+} from "@chakra-ui/react"
+import { ViewIcon, ViewOffIcon, ArrowForwardIcon, CheckCircleIcon, WarningIcon } from "@chakra-ui/icons"
+import { motion } from "framer-motion"
+import { authService } from "../services/authService"
+import Logo from "../components/Logo"
+
+const MotionBox = motion(Box)
+const MotionFlex = motion(Flex)
+const MotionHeading = motion(Heading)
+const MotionText = motion(Text)
+const MotionDivider = motion(Divider)
 
 function ResetPassword() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const toast = useToast()
+
+  // Get email and code from location state
+  const { email, code } = location.state || {}
+  if (!email || !code) {
+    navigate("/forgot-password")
+    return null
+  }
+
   const [formData, setFormData] = useState({
-    email: "",
-    newPassword: "",
+    password: "",
     confirmPassword: "",
-  });
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const toast = useToast();
+  })
+  const [errors, setErrors] = useState({})
 
-  useEffect(() => {
-    if (location.state?.email && location.state?.code) {
-      setFormData((prev) => ({
-        ...prev,
-        email: location.state.email,
-      }));
-    } else {
-      navigate("/forgot-password");
-    }
-  }, [location.state, navigate]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (formData.newPassword.length < 8) {
-      newErrors.newPassword = "Password must be at least 8 characters";
-    }
-    if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // Password validation rules
+  const passwordRules = [
+    { id: 1, text: "At least 8 characters long", test: (p) => p.length >= 8 },
+    { id: 2, text: "Contains at least one uppercase letter", test: (p) => /[A-Z]/.test(p) },
+    { id: 3, text: "Contains at least one lowercase letter", test: (p) => /[a-z]/.test(p) },
+    { id: 4, text: "Contains at least one number", test: (p) => /\d/.test(p) },
+    { id: 5, text: "Passwords match", test: (p) => p === formData.confirmPassword },
+  ]
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+    e.preventDefault()
+    if (!validateForm()) return
 
-    setIsLoading(true);
+    setIsLoading(true)
     try {
-      await authService.resetPassword(
-        formData.email,
-        location.state.code,
-        formData.newPassword
-      );
-
+      await authService.resetPassword(email, code, formData.password)
       toast({
-        title: "Success!",
-        description: "Your password has been reset successfully",
+        title: "Password reset successful",
+        description: "You can now login with your new password",
         status: "success",
         duration: 5000,
         position: "top-right",
-      });
-
-      navigate("/login");
+      })
+      navigate("/login")
     } catch (error) {
       toast({
         title: "Error",
@@ -98,122 +87,287 @@ function ResetPassword() {
         status: "error",
         duration: 5000,
         position: "top-right",
-      });
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
+
+  const validateForm = () => {
+    const newErrors = {}
+    const allRulesPassed = passwordRules.every(rule => rule.test(formData.password))
+    
+    if (!allRulesPassed) {
+      newErrors.password = "Please meet all password requirements"
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match"
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+  }
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        delayChildren: 0.1,
+        staggerChildren: 0.08,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: { type: "spring", stiffness: 100, damping: 20 },
+    },
+  }
+
+  const buttonVariants = {
+    hover: {
+      scale: 1.03,
+      boxShadow: "6px 6px 0 rgba(0,0,0,0.9)",
+      translateY: "-2px",
+      translateX: "-2px",
+    },
+    tap: {
+      scale: 0.98,
+      boxShadow: "2px 2px 0 rgba(0,0,0,0.9)",
+      translateY: "0px",
+      translateX: "0px",
+    },
+  }
+
+  const bgGradient = useColorModeValue(
+    "linear(to-br, gray.50, teal.50, blue.50)",
+    "linear(to-br, gray.900, teal.900, blue.900)"
+  )
 
   return (
-    <Box bg="paper.50" minH="100vh" py={12}>
-      <Container maxW="md" bg="white" p={8} {...containerStyles}>
-        <VStack spacing={8}>
-          <Heading color="paper.500">Set New Password</Heading>
-          <Box as="form" onSubmit={handleSubmit} width="100%">
-            <VStack spacing={6}>
-              <FormControl>
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="bold"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                >
-                  Email
-                </FormLabel>
+    <Box
+      minH="100vh"
+      bgGradient={bgGradient}
+      position="relative"
+      overflow="hidden"
+      py={{ base: 10, md: 0 }}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+    >
+      {/* Decorative circles */}
+      <Box
+        position="absolute"
+        top="10%"
+        left="5%"
+        width="200px"
+        height="200px"
+        borderRadius="full"
+        bgGradient="linear(to-r, teal.200, teal.100)"
+        opacity="0.4"
+        zIndex={0}
+      />
+      
+      <Box
+        position="absolute"
+        bottom="10%"
+        right="5%"
+        width="300px"
+        height="300px"
+        borderRadius="full"
+        bgGradient="linear(to-l, blue.100, teal.100)"
+        opacity="0.3"
+        zIndex={0}
+      />
+
+      <Container maxW="md" py={{ base: 10, md: 20 }} position="relative" zIndex={1}>
+        <MotionFlex
+          direction="column"
+          bg="white"
+          p={{ base: 8, md: 12 }}
+          rounded="xl"
+          boxShadow="2xl"
+          borderTop="6px solid"
+          borderColor="teal.400"
+          overflow="hidden"
+          position="relative"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {/* Decorative corner accent */}
+          <Box
+            position="absolute"
+            top="0"
+            right="0"
+            width="120px"
+            height="120px"
+            bgGradient="linear(to-br, teal.50, blue.50)"
+            transform="translate(60px, -60px) rotate(45deg)"
+            zIndex={0}
+          />
+
+          <MotionBox textAlign="center" mb={8} zIndex={1} variants={itemVariants}>
+            <Logo size="xl" mb={6} />
+            <MotionHeading
+              as="h1"
+              size="xl"
+              mb={3}
+              bgGradient="linear(to-r, teal.400, teal.600)"
+              bgClip="text"
+              variants={itemVariants}
+            >
+              Create New Password
+            </MotionHeading>
+            <MotionText color="gray.600" variants={itemVariants}>
+              Please choose a strong password for your account
+            </MotionText>
+          </MotionBox>
+
+          <MotionDivider mb={8} variants={itemVariants} />
+
+          <VStack as="form" onSubmit={handleSubmit} spacing={6} position="relative" zIndex={1}>
+            <FormControl isInvalid={errors.password} as={motion.div} variants={itemVariants}>
+              <FormLabel fontWeight="medium">New Password</FormLabel>
+              <InputGroup>
                 <Input
-                  value={formData.email}
-                  isReadOnly
-                  bg="paper.100"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={handleChange}
                   size="lg"
+                  bg="gray.50"
+                  borderColor="gray.300"
+                  _hover={{ borderColor: "teal.300" }}
+                  _focus={{
+                    borderColor: "teal.400",
+                    boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
+                  }}
                 />
-              </FormControl>
-
-              <FormControl isInvalid={errors.newPassword}>
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="bold"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                >
-                  New Password
-                </FormLabel>
-                <InputGroup size="lg">
-                  <Input
-                    name="newPassword"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.newPassword}
-                    onChange={handleChange}
-                    placeholder="Enter new password"
-                    bg="paper.50"
+                <InputRightElement>
+                  <Icon
+                    as={showPassword ? ViewOffIcon : ViewIcon}
+                    cursor="pointer"
+                    onClick={() => setShowPassword(!showPassword)}
+                    color="gray.500"
                   />
-                  <InputRightElement width="4.5rem">
-                    <Button
-                      h="1.75rem"
-                      size="sm"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <ViewOffIcon /> : <ViewIcon />}
-                    </Button>
-                  </InputRightElement>
-                </InputGroup>
-                <FormErrorMessage>{errors.newPassword}</FormErrorMessage>
-              </FormControl>
+                </InputRightElement>
+              </InputGroup>
+              <FormErrorMessage>{errors.password}</FormErrorMessage>
+            </FormControl>
 
-              <FormControl isInvalid={errors.confirmPassword}>
-                <FormLabel
-                  fontSize="sm"
-                  fontWeight="bold"
-                  textTransform="uppercase"
-                  letterSpacing="wide"
-                >
-                  Confirm Password
-                </FormLabel>
+            <FormControl isInvalid={errors.confirmPassword} as={motion.div} variants={itemVariants}>
+              <FormLabel fontWeight="medium">Confirm Password</FormLabel>
+              <InputGroup>
                 <Input
                   name="confirmPassword"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  placeholder="Confirm new password"
                   size="lg"
-                  bg="paper.50"
+                  bg="gray.50"
+                  borderColor="gray.300"
+                  _hover={{ borderColor: "teal.300" }}
+                  _focus={{
+                    borderColor: "teal.400",
+                    boxShadow: "0 0 0 1px var(--chakra-colors-teal-400)",
+                  }}
                 />
-                <FormErrorMessage>{errors.confirmPassword}</FormErrorMessage>
-              </FormControl>
+                <InputRightElement>
+                  <Icon
+                    as={showPassword ? ViewOffIcon : ViewIcon}
+                    cursor="pointer"
+                    onClick={() => setShowPassword(!showPassword)}
+                    color="gray.500"
+                  />
+                </InputRightElement>
+              </InputGroup>
+              <FormErrorMessage>{errors.confirmPassword}</FormErrorMessage>
+            </FormControl>
 
+            <Box w="full" bg="gray.50" p={4} borderRadius="md" as={motion.div} variants={itemVariants}>
+              <Text fontSize="sm" fontWeight="medium" mb={2}>
+                Password Requirements:
+              </Text>
+              <List spacing={2}>
+                {passwordRules.map(rule => (
+                  <ListItem
+                    key={rule.id}
+                    fontSize="sm"
+                    color={rule.test(formData.password) ? "green.500" : "gray.500"}
+                    display="flex"
+                    alignItems="center"
+                  >
+                    <ListIcon
+                      as={rule.test(formData.password) ? CheckCircleIcon : WarningIcon}
+                      color={rule.test(formData.password) ? "green.500" : "gray.400"}
+                    />
+                    {rule.text}
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+
+            {/* Neo-brutalist Button */}
+            <MotionBox w="full" variants={itemVariants}>
               <Button
                 type="submit"
-                width="full"
                 size="lg"
-                variant="solid"
+                width="full"
+                bg="teal.500"
+                color="white"
+                height="56px"
+                fontSize="md"
+                fontWeight="bold"
+                border="2px solid black"
+                boxShadow="4px 4px 0 black"
+                _hover={{}}
+                _active={{}}
                 isLoading={isLoading}
-                loadingText="UPDATING PASSWORD..."
+                loadingText="Resetting password..."
+                rightIcon={<ArrowForwardIcon />}
+                as={motion.button}
+                variants={buttonVariants}
+                whileHover="hover"
+                whileTap="tap"
+                transition={{ duration: 0.1 }}
               >
-                RESET PASSWORD
+                Reset Password
               </Button>
-            </VStack>
-          </Box>
-        </VStack>
+            </MotionBox>
+
+            <HStack w="full" justify="center" spacing={1} as={motion.div} variants={itemVariants}>
+              <Text color="gray.600">Remember your password?</Text>
+              <Button
+                as={Link}
+                to="/login"
+                variant="link"
+                color="teal.500"
+                fontWeight="bold"
+                _hover={{ color: "teal.600" }}
+              >
+                Sign in
+              </Button>
+            </HStack>
+          </VStack>
+        </MotionFlex>
       </Container>
     </Box>
-  );
+  )
 }
 
-const containerStyles = {
-  border: "2px solid",
-  borderColor: "paper.400",
-  transform: "translate(-4px, -4px)",
-  boxShadow: "6px 6px 0 black",
-  position: "relative",
-  _before: {
-    content: '""',
-    position: "absolute",
-    top: "15px",
-    left: "15px",
-    right: "-15px",
-    bottom: "-15px",
-    border: "2px solid black",
-    zIndex: -1,
-  },
-};
-
-export default ResetPassword;
+export default ResetPassword
