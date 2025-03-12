@@ -102,10 +102,11 @@ api.interceptors.response.use(
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            // Clear auth state and redirect to login
+            // Clear auth state
             const logout = useAuthState.getState().logout;
             logout();
-            window.location.href = '/login';
+            // Don't use window.location, let React Router handle navigation
+            // The AuthProvider will handle redirecting to login
         }
 
         return Promise.reject(error);
