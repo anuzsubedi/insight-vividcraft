@@ -40,35 +40,11 @@ function ViewPost() {
     const loadPost = async () => {
       try {
         const data = await postService.getPost(id);
-        if (!data) {
+        if (!data || !data.post) {
           navigate('/404');
           return;
         }
-        // Get post with reactions from response
-        const post = data.post;
-        if (!post.reactions || post.userReaction === undefined) {
-          // If reactions are not included in post response, fetch them
-          try {
-            const reactions = await postService.getReactions(post.id);
-            setPost({
-              ...post,
-              reactions: {
-                upvotes: reactions.upvotes || 0,
-                downvotes: reactions.downvotes || 0
-              },
-              userReaction: reactions.userReaction
-            });
-          } catch (error) {
-            console.error('Error loading reactions:', error);
-            setPost({
-              ...post,
-              reactions: { upvotes: 0, downvotes: 0 },
-              userReaction: null
-            });
-          }
-        } else {
-          setPost(post);
-        }
+        setPost(data.post); // The post response already includes reactions
       } catch (error) {
         console.error('Error loading post:', error);
         toast({
@@ -82,7 +58,6 @@ function ViewPost() {
         setIsLoading(false);
       }
     };
-
     loadPost();
   }, [id, toast, navigate]);
 
@@ -103,17 +78,28 @@ function ViewPost() {
     // Optimistically update UI
     setIsReactionAnimating(true);
     const updatedPost = { ...post };
+    
     if (post.userReaction === type) {
-      // Removing reaction
-      updatedPost.reactions[`${type}s`] -= 1;
+      // Removing reaction (toggle off)
+      updatedPost.reactions = {
+        ...updatedPost.reactions,
+        [`${type}s`]: Math.max(0, (updatedPost.reactions[`${type}s`] || 0) - 1)
+      };
       updatedPost.userReaction = null;
     } else {
       // If there was a previous reaction, remove it
       if (post.userReaction) {
-        updatedPost.reactions[`${post.userReaction}s`] -= 1;
+        updatedPost.reactions = {
+          ...updatedPost.reactions,
+          [`${post.userReaction}s`]: Math.max(0, (updatedPost.reactions[`${post.userReaction}s`] || 0) - 1)
+        };
       }
+      
       // Add new reaction
-      updatedPost.reactions[`${type}s`] += 1;
+      updatedPost.reactions = {
+        ...updatedPost.reactions,
+        [`${type}s`]: (updatedPost.reactions[`${type}s`] || 0) + 1
+      };
       updatedPost.userReaction = type;
     }
 
@@ -302,9 +288,11 @@ function ViewPost() {
         </Box>
 
         {/* Comments section with subtle separator */}
-        <Box px={8} py={6} bg="gray.50">
+        <Box px={8} py={6} bg="gray.50" position="relative">
           <Divider mb={6} />
-          <Comments postId={post.id} />
+          <Box pl={4}>  {/* Add left padding to accommodate thread lines and chevrons */}
+            <Comments postId={post.id} />
+          </Box>
         </Box>
       </Box>
     </Container>

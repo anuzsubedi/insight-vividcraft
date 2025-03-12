@@ -1,6 +1,6 @@
 import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -69,10 +69,12 @@ async function getCommentReactionsWithUser(commentId, userId) {
 }
 
 // Get comments for a post
-router.get('/post/:postId', async (req, res) => {
+router.get('/post/:postId', optionalAuth, async (req, res) => {
     try {
         const { postId } = req.params;
         const userId = req.user?.userId;
+
+        console.log('Get comments request with auth state:', { postId, userId: userId || 'anonymous' });
 
         const { data: comments, error } = await supabase
             .from('comments')
@@ -166,11 +168,15 @@ router.post('/', verifyToken, async (req, res) => {
       throw error;
     }
 
-    // Add initial reaction state
+    // Add initial reaction state using the same function as other endpoints for consistency
+    const reactions = await getCommentReactionsWithUser(data.id, userId);
     const comment = {
       ...data,
-      reactions: { upvotes: 0, downvotes: 0 },
-      userReaction: null
+      reactions: {
+        upvotes: reactions.upvotes,
+        downvotes: reactions.downvotes
+      },
+      userReaction: reactions.userReaction
     };
     
     console.log('[CREATE COMMENT] Success:', comment);
@@ -214,7 +220,7 @@ router.put('/:id', verifyToken, async (req, res) => {
     if (error) throw error;
 
     // Get reactions for updated comment
-    const reactions = await getCommentReactions(id, userId);
+    const reactions = await getCommentReactionsWithUser(id, userId);
     const commentWithReactions = {
       ...comment,
       reactions: {
@@ -347,11 +353,14 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
 });
 
 // Get reactions for a comment
-router.get('/:id/reactions', async (req, res) => {
+router.get('/:id/reactions', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;
-    const reactions = await getCommentReactions(id, userId);
+    
+    console.log('Get comment reactions request with auth state:', { id, userId: userId || 'anonymous' });
+    
+    const reactions = await getCommentReactionsWithUser(id, userId);
     res.json(reactions);
   } catch (error) {
     console.error('Error getting reactions:', error);

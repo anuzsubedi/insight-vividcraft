@@ -19,7 +19,10 @@ export const postService = {
             return response.data;
         } catch (error) {
             console.error('[GET POST] Error:', error);
-            throw new Error(error.response?.data?.error || 'Failed to fetch post');
+            if (error.response?.status === 404) {
+                return null;
+            }
+            throw error;
         }
     },
 
