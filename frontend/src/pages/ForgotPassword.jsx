@@ -23,7 +23,7 @@ import {
   Badge,
 } from "@chakra-ui/react"
 import { ArrowForwardIcon } from "@chakra-ui/icons"
-import { motion, useAnimation } from "framer-motion"
+import { motion,  } from "framer-motion"
 import { authService } from "../services/authService"
 import Logo from "../components/Logo"
 
@@ -42,7 +42,6 @@ function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false)
   const [resetRequested, setResetRequested] = useState(false)
   const toast = useToast()
-  const controls = useAnimation()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
