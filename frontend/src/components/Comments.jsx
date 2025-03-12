@@ -110,7 +110,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
   return (
     <Box position="relative" ml={level === 0 ? 0 : `${threadLineOffset}px`}>
       {/* Thread line with better visibility and max depth handling */}
-      {level > 0 && (
+      {level > 0 && hasValidReplies && (
         <Box
           position="absolute"
           left={threadLineLeft}
@@ -156,7 +156,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
 
         <HStack spacing={4} mb={2} align="start" position="relative" role="group">
           {/* Collapse button with better hover interaction */}
-          {hasReplies && (
+          {hasReplies && hasValidReplies && (
             <IconButton
               icon={isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
               variant="ghost"
