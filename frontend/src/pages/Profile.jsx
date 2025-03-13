@@ -38,9 +38,11 @@ import {
   NotAllowedIcon, 
   DeleteIcon, 
   ViewOffIcon,
-  HamburgerIcon,
   CheckIcon 
 } from "@chakra-ui/icons";
+import { BiUpvote, BiDownvote, BiComment, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
+import { FiMoreHorizontal } from 'react-icons/fi';
+import { formatDistanceToNow } from 'date-fns';
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { profileService } from "../services/profileService";
 import { postService } from "../services/postService";
@@ -74,9 +76,8 @@ function Profile() {
   const [filteredPosts, setFilteredPosts] = useState([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
   const [postType, setPostType] = useState("all");
-  const [sortOrder, setSortOrder] = useState("newest");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [availableCategories, setAvailableCategories] = useState([]);
+  const [sortOrder, setSortOrder] = useState("recent"); 
+  const [sortPeriod, setSortPeriod] = useState("all");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalPosts, setTotalPosts] = useState(0);
@@ -97,9 +98,9 @@ function Profile() {
       const response = await postService.getUserPosts(username, {
         page,
         limit: 10,
-        category: selectedCategory,
         type: postType,
-        sortBy: sortOrder
+        sortBy: sortOrder,
+        period: sortPeriod
       });
       
       if (!response || !response.posts) {
@@ -120,10 +121,6 @@ function Profile() {
         page === 1 ? response.posts : [...prevPosts, ...response.posts]
       );
       
-      // Set available categories on first load
-      if (page === 1 && response.categories) {
-        setAvailableCategories(response.categories);
-      }
     } catch (error) {
       console.error("Error loading posts:", error);
       // Don't show error toast for network timeouts to avoid spam
@@ -143,7 +140,7 @@ function Profile() {
     } finally {
       setIsLoadingPosts(false);
     }
-  }, [username, page, selectedCategory, postType, sortOrder, hasMore, isLoadingPosts, toast]);
+  }, [username, page, postType, sortOrder, sortPeriod, hasMore, isLoadingPosts, toast]);
 
   // Reset and reload posts when filters change
   useEffect(() => {
@@ -151,7 +148,7 @@ function Profile() {
     setPosts([]);
     setPage(1);
     setHasMore(true);
-  }, [username, selectedCategory, postType, sortOrder]);
+  }, [username, postType, sortOrder, sortPeriod]);
 
   // Load posts when page is reset or changed
   useEffect(() => {
@@ -159,6 +156,13 @@ function Profile() {
       loadMorePosts();
     }
   }, [username, page, loadMorePosts, hasMore]);
+
+  // Reset period when changing sort order
+  useEffect(() => {
+    if (sortOrder === 'top') {
+      setSortPeriod('all');
+    }
+  }, [sortOrder]);
 
   // Load more posts when scrolling to bottom
   useEffect(() => {
@@ -399,6 +403,69 @@ function Profile() {
         title: "Error unpublishing post",
         description: error.message,
         status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
+  // Add handleReaction function
+  const handleReaction = async (postId, type) => {
+    if (!user) {
+      toast({
+        title: 'Please login to react',
+        status: 'warning',
+        duration: 3000,
+      });
+      return;
+    }
+
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    // Store previous state for rollback
+    const previousReactions = { ...post.reactions };
+    const previousUserReaction = post.userReaction;
+
+    // Optimistically update UI
+    const updatedPost = { ...post };
+    if (post.userReaction === type) {
+      // Removing reaction
+      updatedPost.reactions[`${type}s`] -= 1;
+      updatedPost.userReaction = null;
+    } else {
+      // If there was a previous reaction, remove it
+      if (post.userReaction) {
+        updatedPost.reactions[`${post.userReaction}s`] -= 1;
+      }
+      // Add new reaction
+      updatedPost.reactions[`${type}s`] += 1;
+      updatedPost.userReaction = type;
+    }
+
+    setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
+
+    try {
+      const result = await postService.addReaction(postId, type);
+      // Use the server response to update the state
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        reactions: {
+          upvotes: result.upvotes || 0,
+          downvotes: result.downvotes || 0
+        },
+        userReaction: result.userReaction
+      } : p));
+    } catch (error) {
+      // Revert on error
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        reactions: previousReactions,
+        userReaction: previousUserReaction
+      } : p));
+      toast({
+        title: 'Error updating reaction',
+        description: error.message,
+        status: 'error',
         duration: 3000,
       });
     }
@@ -783,24 +850,25 @@ function Profile() {
                   borderColor="black"
                   _focus={{ borderColor: "accent.100", boxShadow: "none" }}
                 >
-                  <option value="newest">Newest First</option>
-                  <option value="oldest">Oldest First</option>
+                  <option value="recent">Recent</option>
+                  <option value="top">Top</option>
                 </Select>
-                
-                <Select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  borderWidth="2px"
-                  borderColor="black"
-                  _focus={{ borderColor: "accent.100", boxShadow: "none" }}
-                >
-                  <option value="all">All Categories</option>
-                  {availableCategories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </Select>
+
+                {sortOrder === 'top' && (
+                  <Select
+                    value={sortPeriod}
+                    onChange={(e) => setSortPeriod(e.target.value)}
+                    borderWidth="2px"
+                    borderColor="black"
+                    _focus={{ borderColor: "accent.100", boxShadow: "none" }}
+                  >
+                    <option value="all">All Time</option>
+                    <option value="day">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="year">Past Year</option>
+                  </Select>
+                )}
               </HStack>
             </Flex>
 
@@ -812,119 +880,170 @@ function Profile() {
             {filteredPosts.map((post) => (
               <Box
                 key={post.id}
-                p={6}
-                border="2px solid"
-                borderColor="black"
                 bg="white"
-                transform="none"
-                boxShadow="5px 5px 0 black"
+                borderBottom="2px solid"
+                borderColor="gray.200"
                 _hover={{
-                  transform: "translate(-3px, -3px)",
-                  boxShadow: "8px 8px 0 black",
+                  bg: "gray.50",
                   cursor: "pointer"
                 }}
                 transition="all 0.2s"
+                position="relative"
                 onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
               >
-                <Flex justify="space-between" align="start" width="100%">
-                  <VStack align="start" spacing={3} flex="1">
-                    <Heading size="md">{post.title}</Heading>
-                    <HStack wrap="wrap">
-                      <Badge
-                        px={2}
-                        py={1}
-                        bg="paper.100"
-                        color="paper.800"
-                        fontWeight="bold"
-                        textTransform="uppercase"
-                        border="1px solid"
-                        borderColor="paper.300"
-                      >
-                        {post.type}
-                      </Badge>
-                      {post.category && (
+                <Box p={6}>
+                  {/* Top section with avatar, username, date, and menu */}
+                  <HStack spacing={4} mb={4} position="relative">
+                    <HStack flex={1}>
+                      <Avatar
+                        size="md"
+                        name={profile.displayName}
+                        src={profile.avatarName ? `/avatars/${profile.avatarName}` : undefined}
+                      />
+                      <VStack align="start" spacing={0}>
+                        <HStack spacing={2}>
+                          <Text fontWeight="bold">@{profile.username}</Text>
+                          {post.type === 'article' && post.category && (
+                            <Badge px={3} py={1} colorScheme="teal">
+                              {post.category.name}
+                            </Badge>
+                          )}
+                        </HStack>
+                        <Text fontSize="sm" color="gray.600">
+                          {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
+                        </Text>
+                      </VStack>
+                    </HStack>
+
+                    {/* Move menu to top right and update icon */}
+                    {isOwnProfile && (
+                      <Menu isLazy>
+                        <MenuButton
+                          as={IconButton}
+                          icon={<FiMoreHorizontal />}
+                          variant="ghost"
+                          size="sm"
+                          position="absolute"
+                          top={2}
+                          right={2}
+                          aria-label="Post options"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Portal>
+                          <MenuList
+                            border="1px solid"
+                            borderColor="gray.200"
+                            onClick={(e) => e.stopPropagation()}
+                            bg="white"
+                            zIndex={1400}
+                          >
+                            <MenuItem 
+                              as={Link}
+                              to={`/posts/${post.id}/edit`}
+                              state={{ from: location.pathname }}
+                              icon={<EditIcon />}
+                            >
+                              Edit
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<ViewOffIcon />} 
+                              onClick={() => handleUnpublishPost(post.id)}
+                            >
+                              Move to Drafts
+                            </MenuItem>
+                            <MenuItem 
+                              icon={<DeleteIcon />} 
+                              color="red.500"
+                              onClick={() => handleDeletePost(post.id)}
+                            >
+                              Delete Post
+                            </MenuItem>
+                          </MenuList>
+                        </Portal>
+                      </Menu>
+                    )}
+
+                    <HStack spacing={2} ml="auto">
+                      {post.type === 'article' && post.category && (
                         <Badge
-                          px={2}
+                          px={3}
                           py={1}
-                          bg="green.100"
-                          color="green.800"
-                          fontWeight="bold"
-                          textTransform="uppercase"
-                          border="1px solid"
-                          borderColor="green.300"
+                          colorScheme="teal"
                         >
                           {post.category.name}
                         </Badge>
                       )}
-                      {post.tags && post.tags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          px={2}
-                          py={1}
-                          bg="teal.100"
-                          color="teal.800"
-                          fontWeight="bold"
-                          textTransform="uppercase"
-                          border="1px solid"
-                          borderColor="teal.300"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
                     </HStack>
-                    <Text noOfLines={3} color="paper.600">
+                  </HStack>
+
+                  {/* Post content */}
+                  <Box pl={14}> {/* Align content with username */}
+                    {post.type === 'article' && post.title && (
+                      <Text 
+                        fontWeight="bold"
+                        fontSize="2xl"
+                        mb={3}
+                      >
+                        {post.title}
+                      </Text>
+                    )}
+                    <Text 
+                      fontSize="lg" 
+                      mb={4}
+                      color="gray.700"
+                      whiteSpace="pre-wrap"
+                    >
                       {post.body}
                     </Text>
-                  </VStack>
-                  
-                  {isOwnProfile && (
-                    <Menu isLazy gutter={4}>
-                      <MenuButton
-                        as={IconButton}
-                        icon={<HamburgerIcon />}
+                  </Box>
+                </Box>
+                
+                {/* Reactions section */}
+                <HStack spacing={6} px={6} pb={4} onClick={e => e.stopPropagation()}>
+                  <HStack spacing={4}>
+                    {/* Upvotes */}
+                    <HStack spacing={1}>
+                      <IconButton
+                        icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
                         variant="ghost"
-                        aria-label="Post options"
-                        onClick={(e) => e.stopPropagation()}
-                        position="relative"
-                        zIndex={2}
+                        size="sm"
+                        color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                        aria-label="Upvote"
+                        onClick={() => handleReaction(post.id, 'upvote')}
                       />
-                      <Portal>
-                        <MenuList
-                          border="2px solid"
-                          borderColor="black"
-                          borderRadius="0"
-                          boxShadow="4px 4px 0 black"
-                          onClick={(e) => e.stopPropagation()}
-                          bg="white"
-                          zIndex={1400}
-                          position="relative"
-                        >
-                          <MenuItem 
-                            as={Link}
-                            to={`/posts/${post.id}/edit`}
-                            state={{ from: location.pathname }}
-                            icon={<EditIcon />}
-                          >
-                            Edit
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<ViewOffIcon />} 
-                            onClick={() => handleUnpublishPost(post.id)}
-                          >
-                            Move to Drafts
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<DeleteIcon />} 
-                            color="red.500"
-                            onClick={() => handleDeletePost(post.id)}
-                          >
-                            Delete Post
-                          </MenuItem>
-                        </MenuList>
-                      </Portal>
-                    </Menu>
-                  )}
-                </Flex>
+                      <Text 
+                        color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
+                        fontWeight="semibold"
+                      >
+                        {post.reactions?.upvotes || 0}
+                      </Text>
+                    </HStack>
+
+                    {/* Downvotes */}
+                    <HStack spacing={1}>
+                      <IconButton
+                        icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                        variant="ghost"
+                        size="sm"
+                        color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                        aria-label="Downvote"
+                        onClick={() => handleReaction(post.id, 'downvote')}
+                      />
+                      <Text 
+                        color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                        fontWeight="semibold"
+                      >
+                        {post.reactions?.downvotes || 0}
+                      </Text>
+                    </HStack>
+                  </HStack>
+
+                  {/* Comments count */}
+                  <HStack spacing={2}>
+                    <BiComment size={20} />
+                    <Text>{post.comment_count || 0}</Text>
+                  </HStack>
+                </HStack>
               </Box>
             ))}
             

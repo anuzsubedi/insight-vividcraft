@@ -1,6 +1,7 @@
 import express from "express";
 import { supabase } from "../config/supabaseClient.js";
 import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
+import { addReactionsToPosts } from "../utils/reactionHelpers.js";
 
 const router = express.Router();
 
@@ -411,20 +412,55 @@ router.get("/", async (req, res, next) => {
     }
 });
 
+// Helper function to get sort query based on parameters
+function getSortQuery(query, sortBy = 'recent', period = 'all') {
+    if (sortBy === 'recent') {
+        return query.order('published_at', { ascending: false });
+    }
+
+    // For top posts, filter by time period first
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (period) {
+        case 'day':
+            startDate.setDate(now.getDate() - 1);
+            break;
+        case 'week':
+            startDate.setDate(now.getDate() - 7);
+            break;
+        case 'month':
+            startDate.setMonth(now.getMonth() - 1);
+            break;
+        case 'year':
+            startDate.setFullYear(now.getFullYear() - 1);
+            break;
+        case 'all':
+        default:
+            startDate = new Date(0); // Beginning of time
+            break;
+    }
+
+    return query
+        .gte('published_at', startDate.toISOString())
+        .order('published_at', { ascending: false }); // We'll sort by reactions after fetching
+}
+
 // Get user posts by username
 router.get("/user/:username", async (req, res) => {
     try {
-        const { username } = req.params;
+        const { 
+            username 
+        } = req.params;
         const { 
             category, 
             type = "all", 
             limit = 10, 
             page = 1,
-            sortBy = "newest"
+            sortBy = "recent",
+            period = "all"
         } = req.query;
         const offset = (page - 1) * limit;
-
-        console.log('Getting posts for user:', { username, category, type, limit, page, offset, sortBy });
 
         // First get the user ID
         const { data: user, error: userError } = await supabase
@@ -443,9 +479,16 @@ router.get("/user/:username", async (req, res) => {
             .from("posts")
             .select(`
                 *,
-                author:users!posts_author_id_fkey (id, username, display_name),
+                author:users!posts_author_id_fkey (id, username, display_name, avatar_name),
                 category:categories!posts_category_id_fkey (id, name)
-            `, { count: 'exact' })
+            `)
+            .eq("author_id", user.id)
+            .eq("status", "published");
+
+        // Get total count for pagination
+        const { count } = await supabase
+            .from("posts")
+            .select("*", { count: 'exact' })
             .eq("author_id", user.id)
             .eq("status", "published");
 
@@ -458,31 +501,46 @@ router.get("/user/:username", async (req, res) => {
             query = query.eq("type", type);
         }
 
-        // Apply sorting
-        switch (sortBy) {
-            case "oldest":
-                query = query.order("published_at", { ascending: true });
-                break;
-            case "newest":
-            default:
-                query = query.order("published_at", { ascending: false });
-        }
+        // Apply sorting and time period filter
+        query = getSortQuery(query, sortBy, period);
 
         // Apply pagination
         query = query.range(offset, offset + limit - 1);
 
-        console.log('Executing query for user posts');
-        const { data: posts, error, count } = await query;
+        const { data: posts, error } = await query;
 
         if (error) {
             console.error('Error fetching posts:', error);
             throw error;
         }
 
+        // Add reactions to posts using helper function
+        const postsWithReactions = await Promise.all((posts || []).map(async (post) => {
+            const reactions = await getPostReactionsWithUser(post.id, req.user?.userId);
+            return {
+                ...post,
+                reactions: {
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes
+                },
+                userReaction: reactions.userReaction
+            };
+        }));
+
+        // Sort by reactions if using "top" sort
+        if (sortBy === 'top') {
+            postsWithReactions.sort((a, b) => {
+                const scoreA = (a.reactions?.upvotes || 0) - (a.reactions?.downvotes || 0);
+                const scoreB = (b.reactions?.upvotes || 0) - (b.reactions?.downvotes || 0);
+                return scoreB - scoreA;
+            });
+        }
+
         // Get unique categories for this user's posts (for filters)
         const { data: userCategories } = await supabase
             .from("posts")
             .select(`
+                *,
                 category:categories!posts_category_id_fkey (id, name)
             `)
             .eq("author_id", user.id)
@@ -499,14 +557,8 @@ router.get("/user/:username", async (req, res) => {
             ))
             : [];
 
-        console.log('Returning posts:', { 
-            count, 
-            postsLength: posts?.length, 
-            categoriesLength: uniqueCategories?.length 
-        });
-
         return res.status(200).json({ 
-            posts: posts || [],
+            posts: postsWithReactions,
             categories: uniqueCategories,
             pagination: {
                 total: count || 0,
@@ -515,7 +567,6 @@ router.get("/user/:username", async (req, res) => {
                 hasMore: count > offset + posts.length
             }
         });
-
     } catch (error) {
         console.error("Get user posts error:", error);
         return res.status(500).json({

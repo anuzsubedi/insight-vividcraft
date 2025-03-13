@@ -85,7 +85,8 @@ export const postService = {
                 limit = 10,
                 category,
                 type,
-                sortBy = "newest"
+                sortBy = "recent",
+                period = "all"
             } = filters;
 
             const response = await api.get(ENDPOINTS.POSTS.GET_USER_POSTS(username), {
@@ -94,7 +95,8 @@ export const postService = {
                     limit,
                     category: category !== "all" ? category : undefined,
                     type: type !== "all" ? type : undefined,
-                    sortBy
+                    sortBy,
+                    period: sortBy === "top" ? period : undefined
                 },
                 timeout: 30000
             });
