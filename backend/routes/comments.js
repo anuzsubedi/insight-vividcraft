@@ -157,13 +157,6 @@ router.post('/', verifyToken, async (req, res) => {
     const { content, postId, parentId } = req.body;
     const userId = req.user.userId;
 
-    console.log('[CREATE COMMENT] Creating comment:', {
-      content,
-      postId,
-      parentId,
-      userId
-    });
-
     // Verify the user exists first
     const { data: user, error: userError } = await supabase
       .from('users')
@@ -172,7 +165,6 @@ router.post('/', verifyToken, async (req, res) => {
       .single();
 
     if (userError || !user) {
-      console.error('[CREATE COMMENT] User not found:', userError || 'No user with this ID');
       return res.status(401).json({ error: "User not found or unauthorized" });
     }
 
@@ -186,7 +178,6 @@ router.post('/', verifyToken, async (req, res) => {
         .single();
 
       if (parentError || !parentComment) {
-        console.error('[CREATE COMMENT] Parent comment not found:', parentError);
         return res.status(404).json({ error: "Parent comment not found" });
       }
     }
@@ -207,10 +198,7 @@ router.post('/', verifyToken, async (req, res) => {
       `)
       .single();
 
-    if (error) {
-      console.error('[CREATE COMMENT] Error:', error);
-      throw error;
-    }
+    if (error) throw error;
 
     // Add initial reaction state using the same function as other endpoints for consistency
     const reactions = await getCommentReactionsWithUser(data.id, userId);
@@ -223,10 +211,9 @@ router.post('/', verifyToken, async (req, res) => {
       userReaction: reactions.userReaction
     };
     
-    console.log('[CREATE COMMENT] Success:', comment);
     res.json(comment);
   } catch (error) {
-    console.error('[CREATE COMMENT] Error:', error);
+    console.error('Error creating comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -246,7 +233,6 @@ router.put('/:id', verifyToken, async (req, res) => {
       .single();
 
     if (userError || !user) {
-      console.error('[UPDATE COMMENT] User not found:', userError || 'No user with this ID');
       return res.status(401).json({ error: "User not found or unauthorized" });
     }
 
@@ -276,6 +262,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 
     res.json(commentWithReactions);
   } catch (error) {
+    console.error('Error updating comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -345,6 +332,7 @@ router.post('/:id/remove', verifyToken, async (req, res) => {
 
     res.json({ message: 'Comment removed by admin successfully' });
   } catch (error) {
+    console.error('Error removing comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -438,8 +426,6 @@ router.get('/:id/reactions', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;
-    
-    console.log('Get comment reactions request with auth state:', { id, userId: userId || 'anonymous' });
     
     const reactions = await getCommentReactionsWithUser(id, userId);
     res.json(reactions);

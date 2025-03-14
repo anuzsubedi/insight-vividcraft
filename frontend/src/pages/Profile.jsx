@@ -110,20 +110,35 @@ function Profile() {
         }
         return;
       }
-
+      
+      // Log the actual server response to debug user reactions
+      console.log("Server response for posts:", response.posts.map(p => ({
+        id: p.id,
+        userReaction: p.userReaction,
+        upvotes: p.reactions?.upvotes,
+        downvotes: p.reactions?.downvotes
+      })));
+      
+      // Directly use the server response without fetching reactions again
+      // This ensures we use the userReaction value directly from the backend
+      const postsWithReactions = response.posts.map(post => ({
+        ...post,
+        reactions: post.reactions || { upvotes: 0, downvotes: 0 },
+        userReaction: post.userReaction || null
+      }));
+      
       // Update pagination state
       const { pagination } = response;
       setHasMore(pagination.hasMore);
       setTotalPosts(pagination.total);
-
-      // Update posts list
+      
+      // Update posts list with reactions included
       setPosts(prevPosts => 
-        page === 1 ? response.posts : [...prevPosts, ...response.posts]
+        page === 1 ? postsWithReactions : [...prevPosts, ...postsWithReactions]
       );
       
     } catch (error) {
       console.error("Error loading posts:", error);
-      // Don't show error toast for network timeouts to avoid spam
       if (!error.message.includes('timeout')) {
         toast({
           title: "Error loading posts",
@@ -132,7 +147,6 @@ function Profile() {
           duration: 3000,
         });
       }
-      // Reset hasMore on error to prevent infinite loading attempts
       setHasMore(false);
       if (page === 1) {
         setPosts([]);
@@ -411,12 +425,12 @@ function Profile() {
   // Add handleReaction function
   const handleReaction = async (postId, type) => {
     if (!user) {
-      toast({
-        title: 'Please login to react',
-        status: 'warning',
-        duration: 3000,
-      });
-      return;
+        toast({
+            title: 'Please login to react',
+            status: 'warning',
+            duration: 3000,
+        });
+        return;
     }
 
     const post = posts.find(p => p.id === postId);
@@ -426,50 +440,60 @@ function Profile() {
     const previousReactions = { ...post.reactions };
     const previousUserReaction = post.userReaction;
 
-    // Optimistically update UI
+    console.log(`Before reaction update - Post ${postId}: userReaction=${post.userReaction}, type=${type}`);
+
+    // Optimistically update UI based on current state
     const updatedPost = { ...post };
     if (post.userReaction === type) {
-      // Removing reaction
-      updatedPost.reactions[`${type}s`] -= 1;
-      updatedPost.userReaction = null;
+        // Removing reaction
+        updatedPost.reactions[`${type}s`] -= 1;
+        updatedPost.userReaction = null;
     } else {
-      // If there was a previous reaction, remove it
-      if (post.userReaction) {
-        updatedPost.reactions[`${post.userReaction}s`] -= 1;
-      }
-      // Add new reaction
-      updatedPost.reactions[`${type}s`] += 1;
-      updatedPost.userReaction = type;
+        // If there was a previous reaction, remove it first
+        if (post.userReaction) {
+            updatedPost.reactions[`${post.userReaction}s`] -= 1;
+        }
+        // Add new reaction
+        updatedPost.reactions[`${type}s`] += 1;
+        updatedPost.userReaction = type;
     }
 
+    // Update posts state with optimistic change
     setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
 
     try {
-      const result = await postService.addReaction(postId, type);
-      // Use the server response to update the state
-      setPosts(prev => prev.map(p => p.id === postId ? {
-        ...p,
-        reactions: {
-          upvotes: result.upvotes || 0,
-          downvotes: result.downvotes || 0
-        },
-        userReaction: result.userReaction
-      } : p));
+        // Make API call
+        const result = await postService.addReaction(postId, type);
+        console.log(`Server response for reaction - Post ${postId}:`, result);
+
+        // Update with server response
+        setPosts(prev => prev.map(p => p.id === postId ? {
+            ...p,
+            reactions: {
+                upvotes: result.upvotes || 0,
+                downvotes: result.downvotes || 0
+            },
+            userReaction: result.userReaction
+        } : p));
     } catch (error) {
-      // Revert on error
-      setPosts(prev => prev.map(p => p.id === postId ? {
-        ...p,
-        reactions: previousReactions,
-        userReaction: previousUserReaction
-      } : p));
-      toast({
-        title: 'Error updating reaction',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-      });
+        // Revert on error
+        setPosts(prev => prev.map(p => p.id === postId ? {
+            ...p,
+            reactions: previousReactions,
+            userReaction: previousUserReaction
+        } : p));
+        
+        toast({
+            title: 'Error updating reaction',
+            description: error.message,
+            status: 'error',
+            duration: 3000,
+        });
     }
   };
+
+  // Add helper function 
+  const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
 
   if (isLoading || !profile) {
     return (
@@ -1000,45 +1024,51 @@ function Profile() {
                 
                 {/* Reactions section */}
                 <HStack spacing={6} px={6} pb={4} onClick={e => e.stopPropagation()}>
-                  <HStack spacing={4}>
-                    {/* Upvotes */}
-                    <HStack spacing={1}>
-                      <IconButton
-                        icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
-                        variant="ghost"
-                        size="sm"
-                        color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
-                        aria-label="Upvote"
-                        onClick={() => handleReaction(post.id, 'upvote')}
-                      />
-                      <Text 
-                        color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
-                        fontWeight="semibold"
-                      >
-                        {post.reactions?.upvotes || 0}
-                      </Text>
-                    </HStack>
-
-                    {/* Downvotes */}
-                    <HStack spacing={1}>
-                      <IconButton
-                        icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
-                        variant="ghost"
-                        size="sm"
-                        color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
-                        aria-label="Downvote"
-                        onClick={() => handleReaction(post.id, 'downvote')}
-                      />
-                      <Text 
-                        color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
-                        fontWeight="semibold"
-                      >
-                        {post.reactions?.downvotes || 0}
-                      </Text>
-                    </HStack>
+                  <HStack spacing={2}>
+                    <IconButton
+                      icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
+                      variant="ghost"
+                      size="sm"
+                      color={post.userReaction === 'upvote' ? "accent.500" : "gray.600"}
+                      aria-label="Upvote"
+                      onClick={() => handleReaction(post.id, 'upvote')}
+                      _hover={{ 
+                        color: post.userReaction === 'upvote' ? "accent.600" : "accent.400",
+                        bg: "accent.50" 
+                      }}
+                    />
+                    <Text 
+                      fontSize="sm"
+                      fontWeight="medium"
+                      color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "accent.500" : 
+                             getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : 
+                             "gray.600"}
+                    >
+                      {post.reactions?.upvotes || 0}
+                    </Text>
+                    <IconButton
+                      icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
+                      variant="ghost"
+                      size="sm"
+                      color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
+                      aria-label="Downvote"
+                      onClick={() => handleReaction(post.id, 'downvote')}
+                      _hover={{ 
+                        color: post.userReaction === 'downvote' ? "red.600" : "red.400",
+                        bg: "red.50" 
+                      }}
+                    />
+                    <Text 
+                      fontSize="sm"
+                      fontWeight="medium"
+                      color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "accent.500" : 
+                             getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : 
+                             "gray.600"}
+                    >
+                      {post.reactions?.downvotes || 0}
+                    </Text>
                   </HStack>
 
-                  {/* Comments count */}
                   <HStack spacing={2}>
                     <BiComment size={20} />
                     <Text>{post.comment_count || 0}</Text>

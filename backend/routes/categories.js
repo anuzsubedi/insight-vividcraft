@@ -16,11 +16,8 @@ router.get("/", async (req, res) => {
 
         return res.status(200).json({ categories });
     } catch (error) {
-        console.error("Fetch categories error:", error);
         return res.status(500).json({ error: "Failed to fetch categories" });
     }
 });
-
-
 
 export default router;

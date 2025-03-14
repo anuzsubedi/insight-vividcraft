@@ -42,6 +42,7 @@ router.post("/follow/:username", verifyToken, async (req, res) => {
 
         return res.status(200).json({ message: "Successfully followed user" });
     } catch (error) {
+        console.error('Follow user error:', error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -76,6 +77,7 @@ router.delete("/follow/:username", verifyToken, async (req, res) => {
 
         return res.status(200).json({ message: "Successfully unfollowed user" });
     } catch (error) {
+        console.error('Unfollow user error:', error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -118,6 +120,7 @@ router.post("/mute/:username", verifyToken, async (req, res) => {
 
         return res.status(200).json({ message: "Successfully muted user" });
     } catch (error) {
+        console.error('Mute user error:', error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -152,6 +155,7 @@ router.delete("/mute/:username", verifyToken, async (req, res) => {
 
         return res.status(200).json({ message: "Successfully unmuted user" });
     } catch (error) {
+        console.error('Unmute user error:', error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -194,6 +198,7 @@ router.get("/status/:username", verifyToken, async (req, res) => {
             isMuted: !!muteData
         });
     } catch (error) {
+        console.error('Get status error:', error);
         return res.status(500).json({ error: "Internal Server Error" });
     }
 });
