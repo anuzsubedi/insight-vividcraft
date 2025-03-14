@@ -60,5 +60,8 @@ export const ENDPOINTS = {
     SEARCH: {
         USERS: '/api/search/users',
         POSTS: '/api/search/posts'
+    },
+    REPORTS: {
+        CREATE: '/api/reports'
     }
 };
