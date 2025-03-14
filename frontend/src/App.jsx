@@ -19,6 +19,7 @@ import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
 import SearchDropdown from "./components/SearchDropdown";
+import { api } from './services/api';
 
 const MotionBox = motion(Box);
 
@@ -27,6 +28,22 @@ function App() {
   const navigate = useNavigate();
   const toast = useToast();
   const bgColor = useColorModeValue("gray.50", "gray.900");
+
+  // Add axios interceptor to handle API requests
+  useEffect(() => {
+    api.interceptors.request.use((config) => {
+      // Add the base URL
+      if (!config.url.startsWith('http')) {
+        config.baseURL = import.meta.env.VITE_API_URL;
+      }
+      // Add auth token if available
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+  }, []);
 
   const handleLogout = () => {
     logout();

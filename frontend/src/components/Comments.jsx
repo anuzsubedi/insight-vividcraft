@@ -7,6 +7,7 @@ import { commentService } from '../services/commentService';
 import useAuthState from '../hooks/useAuthState';
 import PropTypes from 'prop-types';
 import { formatDistanceToNow } from 'date-fns';
+import ReportModal from './ReportModal';
 
 // Helper function to calculate net score
 const getNetScore = (upvotes = 0, downvotes = 0) => {
@@ -19,6 +20,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const toast = useToast();
 
   const isDeleted = !!comment.deleted_at;
@@ -93,12 +95,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
 
   // Add handleReport function
   const handleReport = () => {
-    toast({
-      title: 'Report button clicked',
-      description: 'This is a test of the menu functionality',
-      status: 'info',
-      duration: 3000,
-    });
+    setIsReportModalOpen(true);
   };
 
   // Calculate indentation - max out at 8 levels deep to prevent excessive nesting
@@ -342,6 +339,11 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
         </Collapse>
       </Box>
       {level === 0 && <Divider my={4} />}
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        postId={comment.id}
+      />
     </Box>
   );
 };
