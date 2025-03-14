@@ -99,8 +99,6 @@ router.get('/following', authMiddleware, async (req, res) => {
         const { page = 1, limit = 10, sort = 'recent', period = 'all' } = req.query;
         const offset = (page - 1) * limit;
 
-        console.log('Feed request for user:', user.userId); // Debug log
-
         // Get following IDs first
         const { data: followingIds, error: followingError } = await supabase
             .from('follows')
@@ -111,8 +109,6 @@ router.get('/following', authMiddleware, async (req, res) => {
             console.error('Following query error:', followingError);
             throw followingError;
         }
-
-        console.log('Following IDs:', followingIds); // Debug log
 
         // If not following anyone, return empty array
         if (!followingIds || followingIds.length === 0) {
@@ -175,8 +171,6 @@ router.get('/following', authMiddleware, async (req, res) => {
             console.error('Posts query error:', postsError);
             throw postsError;
         }
-
-        console.log('Found posts:', posts?.length || 0); // Debug log
 
         // Add reactions to posts
         const postsWithReactions = await addReactionsToPosts(posts || [], user.userId);

@@ -1,5 +1,6 @@
 import express from "express";
 import { supabase } from "../config/supabaseClient.js";
+// Fix import to use verifyToken
 import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -113,6 +114,91 @@ const getFollowCounts = async (userId) => {
     }
 };
 
+// Helper function to get reaction counts and user reaction
+async function getPostReactions(postId, userId) {
+    try {
+        console.log(`[profile/getPostReactions] START - postId=${postId}, userId=${userId}, type=${typeof userId}`);
+        
+        // Get both counts and user reaction in a single query
+        const { data, error } = await supabase
+            .from('post_reactions')
+            .select(`
+                reaction_type,
+                post_id,
+                user_id
+            `)
+            .match({ post_id: postId });
+
+        if (error) throw error;
+
+        console.log(`[profile/getPostReactions] Found ${data.length} reactions for post ${postId}`);
+        
+        // Log all user IDs from reactions to see what we're comparing against
+        if (data.length > 0) {
+            console.log('[profile/getPostReactions] Reaction user IDs:');
+            data.forEach(r => {
+                console.log(`  - user_id=${r.user_id} (${typeof r.user_id}), reaction=${r.reaction_type}`);
+            });
+        }
+
+        // Calculate counts
+        const upvotes = data.filter(r => r.reaction_type === 'upvote').length;
+        const downvotes = data.filter(r => r.reaction_type === 'downvote').length;
+        
+        // Get user's reaction if they are logged in
+        let userReaction = null;
+        if (userId) {
+            // Find the user's reaction with detailed logging
+            const stringUserId = String(userId);
+            console.log(`[profile/getPostReactions] Looking for reaction with stringUserId=${stringUserId}`);
+            
+            const userReactionObj = data.find(r => {
+                const stringReactionUserId = String(r.user_id);
+                const matches = stringReactionUserId === stringUserId;
+                console.log(`  Comparing: reaction_user_id=${stringReactionUserId} === current_user_id=${stringUserId} => ${matches}`);
+                return matches;
+            });
+            
+            userReaction = userReactionObj ? userReactionObj.reaction_type : null;
+        }
+
+        console.log(`[profile/getPostReactions] RESULT - postId=${postId}, userId=${userId}, userReaction=${userReaction}`);
+        
+        return {
+            upvotes,
+            downvotes,
+            userReaction
+        };
+    } catch (error) {
+        console.error('Error getting post reactions:', error);
+        return { upvotes: 0, downvotes: 0, userReaction: null };
+    }
+}
+
+// Helper function to add reactions to posts
+async function addReactionsToPosts(posts, userId) {
+    return Promise.all(posts.map(async (post) => {
+        try {
+            const reactions = await getPostReactions(post.id, userId);
+            return {
+                ...post,
+                reactions: {
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes
+                },
+                userReaction: reactions.userReaction
+            };
+        } catch (error) {
+            console.error('Error getting reactions for post:', post.id, error);
+            return {
+                ...post,
+                reactions: { upvotes: 0, downvotes: 0 },
+                userReaction: null
+            };
+        }
+    }));
+}
+
 // Get user profile by username
 router.get("/:username", verifyToken, async (req, res) => {
     try {
@@ -212,6 +298,157 @@ router.get("/", verifyToken, async (req, res) => {
     } catch (error) {
         console.error("Server Error:", error);
         return res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+// Update the getUserPosts function to ensure proper authentication
+router.get('/:username/posts', verifyToken, async (req, res) => {
+    try {
+        const { username } = req.params;
+        const { page = 1, limit = 10, type = 'all', sortBy = 'recent', period = 'all' } = req.query;
+        // Extract current user ID without the optional chaining - it should be there due to verifyToken
+        const currentUserId = req.user.userId;
+        const offset = (page - 1) * limit;
+
+        console.log(`[profile] Getting posts for user ${username} with authenticated user ID: ${currentUserId}`);
+
+        // Get user ID from username
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (userError || !userData) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Build the query
+        let query = supabase
+            .from('posts')
+            .select(`
+                *,
+                category:categories (
+                    id,
+                    name
+                ),
+                author:users (
+                    id,
+                    username,
+                    display_name,
+                    avatar_name
+                )
+            `)
+            .eq('author_id', userData.id)
+            .eq('status', 'published');
+
+        // Apply type filter
+        if (type !== 'all') {
+            query = query.eq('type', type);
+        }
+
+        // Apply sorting
+        if (sortBy === 'top') {
+            // For top posts, we'll sort by reactions after fetching
+            const now = new Date();
+            let startDate = new Date();
+
+            switch (period) {
+                case 'day':
+                    startDate.setDate(now.getDate() - 1);
+                    break;
+                case 'week':
+                    startDate.setDate(now.getDate() - 7);
+                    break;
+                case 'month':
+                    startDate.setMonth(now.getMonth() - 1);
+                    break;
+                case 'year':
+                    startDate.setFullYear(now.getFullYear() - 1);
+                    break;
+                default:
+                    startDate = new Date(0);
+            }
+            
+            query = query
+                .gte('published_at', startDate.toISOString())
+                .order('published_at', { ascending: false });
+        } else {
+            // Default to recent
+            query = query.order('published_at', { ascending: false });
+        }
+
+        // Get total count for pagination
+        const { count: total, error: countError } = await supabase
+            .from('posts')
+            .select('id', { count: 'exact' })
+            .eq('author_id', userData.id)
+            .eq('status', 'published');
+
+        if (countError) {
+            throw countError;
+        }
+
+        // Execute the main query with pagination
+        const { data: posts, error: postsError } = await query
+            .range(offset, offset + limit - 1);
+
+        if (postsError) {
+            throw postsError;
+        }
+
+        console.log(`Retrieved ${posts?.length || 0} posts for user ${username}`);
+
+        // Add reactions directly to each post
+        const postsWithReactions = await Promise.all((posts || []).map(async (post) => {
+            try {
+                // Use getPostReactions with the current user ID
+                const reactions = await getPostReactions(post.id, currentUserId);
+                console.log(`Post ${post.id} - User reactions:`, {
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes,
+                    userReaction: reactions.userReaction
+                });
+                
+                return {
+                    ...post,
+                    reactions: {
+                        upvotes: reactions.upvotes,
+                        downvotes: reactions.downvotes
+                    },
+                    userReaction: reactions.userReaction
+                };
+            } catch (error) {
+                console.error(`Error getting reactions for post ${post.id}:`, error);
+                return {
+                    ...post,
+                    reactions: { upvotes: 0, downvotes: 0 },
+                    userReaction: null
+                };
+            }
+        }));
+
+        // Sort by reactions if needed
+        if (sortBy === 'top') {
+            postsWithReactions.sort((a, b) => {
+                const scoreA = (a.reactions?.upvotes || 0) - (a.reactions?.downvotes || 0);
+                const scoreB = (b.reactions?.upvotes || 0) - (b.reactions?.downvotes || 0);
+                return scoreB - scoreA;
+            });
+        }
+
+        res.json({
+            posts: postsWithReactions,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                hasMore: offset + posts.length < total
+            }
+        });
+    } catch (error) {
+        console.error('Error getting user posts:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
