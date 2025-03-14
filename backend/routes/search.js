@@ -53,35 +53,36 @@ router.get('/users', async (req, res) => {
     }
 });
 
-// Search posts and articles with different search strategies
+// Search posts and articles
 router.get('/posts', async (req, res) => {
     try {
         const { q: query, type, limit = 10 } = req.query;
         if (!query) return res.json({ posts: [] });
 
         const searchQuery = prepareSearchQuery(query);
+
         let dbQuery = supabase
             .from('posts')
             .select(`
                 *,
-                author:users!posts_author_id_fkey (username, display_name, avatar_name),
-                category:categories!posts_category_id_fkey (id, name)
+                author:users (username, display_name, avatar_name),
+                category:categories (id, name)
             `)
             .eq('status', 'published');
 
-        if (type === 'article') {
-            // For articles, search by tags
-            dbQuery = dbQuery
-                .eq('type', 'article')
-                // Using contains operator for array to check if any tag includes the search query
-                .filter('tags', 'cs', `{${searchQuery}}`);
-        } else if (type === 'post') {
-            // For posts, search by content
-            dbQuery = dbQuery
-                .eq('type', 'post')
-                .or(`title.ilike.%${searchQuery}%,body.ilike.%${searchQuery}%`);
+        // Add type filter if specified
+        if (type && type !== 'all') {
+            dbQuery = dbQuery.eq('type', type);
+        }
+
+        // Add search conditions based on post type
+        if (type === 'post') {
+            dbQuery = dbQuery.textSearch('body', searchQuery);
+        } else if (type === 'article') {
+            dbQuery = dbQuery.or(
+                `title.ilike.%${searchQuery}%,body.ilike.%${searchQuery}%`
+            );
         } else {
-            // If no type specified, search both but with their respective strategies
             dbQuery = dbQuery.or(
                 `and(type.eq.post,or(title.ilike.%${searchQuery}%,body.ilike.%${searchQuery}%)),` +
                 `and(type.eq.article,tags.cs.{${searchQuery}})`

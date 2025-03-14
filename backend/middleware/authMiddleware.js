@@ -3,7 +3,6 @@ import { supabase } from '../config/supabaseClient.js';
 
 export const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
-    // console.log('Auth header:', authHeader);
     if (!authHeader?.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
@@ -29,7 +28,7 @@ export const verifyToken = async (req, res, next) => {
         }
 
         req.user = {
-            userId: user.id, // Use the ID from database, not from token
+            userId: user.id,
             username: user.username,
             email: user.email
         };
@@ -59,7 +58,7 @@ export const optionalAuth = async (req, res, next) => {
 
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        
+
         // Verify user exists and is active in database
         const { data: user, error } = await supabase
             .from('users')
@@ -67,33 +66,25 @@ export const optionalAuth = async (req, res, next) => {
             .eq('id', decoded.userId)
             .single();
 
-        // If user found, add to request object
-        if (user && !error) {
+        if (!error && user) {
             req.user = {
                 userId: user.id,
                 username: user.username,
                 email: user.email
             };
         }
-        
-        // Continue regardless of whether we found a valid user
         next();
     } catch (error) {
-        // Log but don't reject for token errors in optional auth
-        console.error('Optional token verification error:', error);
+        // For optional auth, just continue without setting user on error
         next();
     }
 };
 
 export const generateToken = (user) => {
     return jwt.sign(
-        {
-            userId: user.id,
-            email: user.email,
-            username: user.username
-        },
+        { userId: user.id },
         process.env.JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '7d' }
     );
 };
 

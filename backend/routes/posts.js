@@ -1,6 +1,7 @@
 import express from "express";
 import { supabase } from "../config/supabaseClient.js";
 import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
+import { addReactionsToPosts } from "../utils/reactionHelpers.js";
 
 const router = express.Router();
 
@@ -10,22 +11,18 @@ async function generateUniqueSlug(title) {
         .trim()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
-
     let slug = baseSlug;
     let counter = 1;
-
     while (true) {
         const { data } = await supabase
             .from('posts')
             .select('id')
             .eq('slug', slug)
             .single();
-
         if (!data) break;
         slug = `${baseSlug}-${counter}`;
         counter++;
     }
-
     return slug;
 }
 
@@ -34,14 +31,6 @@ router.post("/", verifyToken, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
         const authorId = req.user.userId;
-
-        console.log('Creating post with data:', {
-            title, type, categoryId, status,
-            bodyLength: body?.length,
-            tagsCount: tags?.length,
-            scheduledFor,
-            authorId
-        });
 
         // Validation with detailed errors
         const validationErrors = {};
@@ -55,7 +44,6 @@ router.post("/", verifyToken, async (req, res) => {
         }
         
         if (Object.keys(validationErrors).length > 0) {
-            console.log('Validation errors:', validationErrors);
             return res.status(400).json({ 
                 error: "Missing required fields",
                 details: validationErrors
@@ -63,7 +51,6 @@ router.post("/", verifyToken, async (req, res) => {
         }
 
         if (type === 'article' && !title?.trim()) {
-            console.log('Article validation error: missing title');
             return res.status(400).json({ error: "Title is required for articles" });
         }
 
@@ -71,7 +58,6 @@ router.post("/", verifyToken, async (req, res) => {
             .from('posts')
             .insert({
                 title: title || '',
-                // Generate slug for all posts, using timestamp if no title
                 slug: title ? 
                     await generateUniqueSlug(title) : 
                     await generateUniqueSlug(`post-${Date.now()}`),
@@ -99,14 +85,12 @@ router.post("/", verifyToken, async (req, res) => {
         }
 
         if (!post) {
-            console.error('No post data returned after creation');
             return res.status(500).json({ 
                 error: "Failed to create post",
                 details: "No post data returned from database" 
             });
         }
 
-        console.log('Post created successfully:', { postId: post.id, type: post.type });
         return res.status(201).json({
             message: "Post created successfully",
             post
@@ -160,8 +144,6 @@ router.get('/:id', optionalAuth, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.userId;
-        
-        console.log('Get post request with auth state:', { userId: userId || 'anonymous' });
 
         const { data: post, error } = await supabase
             .from('posts')
@@ -214,7 +196,6 @@ router.put("/:id", verifyToken, async (req, res) => {
                     error: "Scheduled posts must have a scheduled_for date"
                 });
             }
-
             if (new Date(scheduledFor) <= new Date()) {
                 return res.status(400).json({
                     error: "Scheduled date must be in the future"
@@ -233,7 +214,6 @@ router.put("/:id", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
-        // Start a transaction for the update
         const updates = {
             title: title || existingPost.title,
             body: body || existingPost.body,
@@ -272,7 +252,6 @@ router.put("/:id", verifyToken, async (req, res) => {
             message: "Post updated successfully",
             post
         });
-
     } catch (error) {
         console.error('Update post error:', error);
         return res.status(500).json({ error: "Failed to update post", details: error.message });
@@ -346,9 +325,7 @@ router.get("/", async (req, res, next) => {
     try {
         // If requesting "my posts", require authentication
         if (req.query.author === 'me') {
-            console.log('Authenticating request for my posts...');
             return verifyToken(req, res, () => {
-                console.log('Authentication successful, continuing...');
                 next();
             });
         }
@@ -359,11 +336,6 @@ router.get("/", async (req, res, next) => {
     }
 }, async (req, res) => {
     try {
-        console.log('Processing posts request:', {
-            query: req.query,
-            user: req.user
-        });
-
         const {
             author,
             category,
@@ -383,7 +355,6 @@ router.get("/", async (req, res, next) => {
 
         // Add filters
         if (author === 'me' && req.user) {
-            console.log('Filtering by author ID:', req.user.userId);
             query = query.eq('author_id', req.user.userId);
         }
 
@@ -395,13 +366,10 @@ router.get("/", async (req, res, next) => {
         const { data: posts, error } = await query;
 
         if (error) {
-            console.error('Supabase query error:', error);
             throw error;
         }
 
-        console.log(`Found ${posts?.length || 0} posts`);
         return res.status(200).json({ posts: posts || [] });
-
     } catch (error) {
         console.error('Posts endpoint error:', error);
         return res.status(500).json({
@@ -411,20 +379,55 @@ router.get("/", async (req, res, next) => {
     }
 });
 
+// Helper function to get sort query based on parameters
+function getSortQuery(query, sortBy = 'recent', period = 'all') {
+    if (sortBy === 'recent') {
+        return query.order('published_at', { ascending: false });
+    }
+
+    // For top posts, filter by time period first
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (period) {
+        case 'day':
+            startDate.setDate(now.getDate() - 1);
+            break;
+        case 'week':
+            startDate.setDate(now.getDate() - 7);
+            break;
+        case 'month':
+            startDate.setMonth(now.getMonth() - 1);
+            break;
+        case 'year':
+            startDate.setFullYear(now.getFullYear() - 1);
+            break;
+        case 'all':
+        default:
+            startDate = new Date(0);
+            break;
+    }
+
+    return query
+        .gte('published_at', startDate.toISOString())
+        .order('published_at', { ascending: false });
+}
+
 // Get user posts by username
 router.get("/user/:username", async (req, res) => {
     try {
-        const { username } = req.params;
+        const { 
+            username 
+        } = req.params;
         const { 
             category, 
             type = "all", 
             limit = 10, 
             page = 1,
-            sortBy = "newest"
+            sortBy = "recent",
+            period = "all"
         } = req.query;
         const offset = (page - 1) * limit;
-
-        console.log('Getting posts for user:', { username, category, type, limit, page, offset, sortBy });
 
         // First get the user ID
         const { data: user, error: userError } = await supabase
@@ -434,7 +437,6 @@ router.get("/user/:username", async (req, res) => {
             .single();
 
         if (userError || !user) {
-            console.error('User not found:', userError);
             return res.status(404).json({ error: "User not found" });
         }
 
@@ -443,9 +445,16 @@ router.get("/user/:username", async (req, res) => {
             .from("posts")
             .select(`
                 *,
-                author:users!posts_author_id_fkey (id, username, display_name),
+                author:users!posts_author_id_fkey (id, username, display_name, avatar_name),
                 category:categories!posts_category_id_fkey (id, name)
-            `, { count: 'exact' })
+            `)
+            .eq("author_id", user.id)
+            .eq("status", "published");
+
+        // Get total count for pagination
+        const { count } = await supabase
+            .from("posts")
+            .select("*", { count: 'exact' })
             .eq("author_id", user.id)
             .eq("status", "published");
 
@@ -458,31 +467,45 @@ router.get("/user/:username", async (req, res) => {
             query = query.eq("type", type);
         }
 
-        // Apply sorting
-        switch (sortBy) {
-            case "oldest":
-                query = query.order("published_at", { ascending: true });
-                break;
-            case "newest":
-            default:
-                query = query.order("published_at", { ascending: false });
-        }
+        // Apply sorting and time period filter
+        query = getSortQuery(query, sortBy, period);
 
         // Apply pagination
         query = query.range(offset, offset + limit - 1);
 
-        console.log('Executing query for user posts');
-        const { data: posts, error, count } = await query;
+        const { data: posts, error } = await query;
 
         if (error) {
-            console.error('Error fetching posts:', error);
             throw error;
+        }
+
+        // Add reactions to posts using helper function
+        const postsWithReactions = await Promise.all((posts || []).map(async (post) => {
+            const reactions = await getPostReactionsWithUser(post.id, req.user?.userId);
+            return {
+                ...post,
+                reactions: {
+                    upvotes: reactions.upvotes,
+                    downvotes: reactions.downvotes
+                },
+                userReaction: reactions.userReaction
+            };
+        }));
+
+        // Sort by reactions if using "top" sort
+        if (sortBy === 'top') {
+            postsWithReactions.sort((a, b) => {
+                const scoreA = (a.reactions?.upvotes || 0) - (a.reactions?.downvotes || 0);
+                const scoreB = (b.reactions?.upvotes || 0) - (b.reactions?.downvotes || 0);
+                return scoreB - scoreA;
+            });
         }
 
         // Get unique categories for this user's posts (for filters)
         const { data: userCategories } = await supabase
             .from("posts")
             .select(`
+                *,
                 category:categories!posts_category_id_fkey (id, name)
             `)
             .eq("author_id", user.id)
@@ -499,14 +522,8 @@ router.get("/user/:username", async (req, res) => {
             ))
             : [];
 
-        console.log('Returning posts:', { 
-            count, 
-            postsLength: posts?.length, 
-            categoriesLength: uniqueCategories?.length 
-        });
-
         return res.status(200).json({ 
-            posts: posts || [],
+            posts: postsWithReactions,
             categories: uniqueCategories,
             pagination: {
                 total: count || 0,
@@ -515,7 +532,6 @@ router.get("/user/:username", async (req, res) => {
                 hasMore: count > offset + posts.length
             }
         });
-
     } catch (error) {
         console.error("Get user posts error:", error);
         return res.status(500).json({
@@ -529,7 +545,6 @@ router.get("/user/:username", async (req, res) => {
 router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
     try {
         const now = new Date().toISOString();
-
         // Get all posts that are scheduled and due for publication
         const { data: posts, error } = await supabase
             .from('posts')
@@ -565,7 +580,6 @@ router.get("/scheduled/publish-due", verifyToken, async (req, res) => {
             message: `${posts?.length || 0} posts published`,
             posts: posts || []
         });
-
     } catch (error) {
         console.error('Publish scheduled posts error:', error);
         return res.status(500).json({
@@ -659,8 +673,6 @@ router.get('/:id/reactions', optionalAuth, async (req, res) => {
         const { id } = req.params;
         const userId = req.user?.userId;
         
-        console.log('Get post reactions request with auth state:', { userId: userId || 'anonymous' });
-        
         const reactions = await getPostReactionsWithUser(id, userId);
         res.json(reactions);
     } catch (error) {
@@ -668,14 +680,5 @@ router.get('/:id/reactions', optionalAuth, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-// Helper function to get reaction counts
-async function getReactionCounts(postId) {
-    const { data, error } = await supabase
-        .rpc('get_post_reaction_counts', { post_id: postId });
-
-    if (error) throw error;
-    return data[0];
-}
 
 export default router;
