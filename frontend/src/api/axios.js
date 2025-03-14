@@ -2,8 +2,8 @@ import axios from 'axios';
 import useAuthState from '../hooks/useAuthState';
 
 const api = axios.create({
-    baseURL: import.meta.env.VITE_BACKEND_URL,
-    timeout: 15000, // Increase timeout to 15 seconds
+    baseURL: 'http://localhost:5000/api',
+    timeout: 15000,
     headers: {
         'Content-Type': 'application/json',
     }

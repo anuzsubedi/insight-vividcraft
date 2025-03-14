@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import {
   Button,
   Text,
@@ -19,7 +20,7 @@ import useAuthState from "./hooks/useAuthState";
 import Logo from "./components/Logo";
 import Feed from "./components/Feed";
 import SearchDropdown from "./components/SearchDropdown";
-import { api } from './services/api';
+import api from "./api/axios";
 
 const MotionBox = motion(Box);
 
