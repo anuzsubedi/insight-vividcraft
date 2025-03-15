@@ -248,7 +248,7 @@ function Feed() {
 
     const handleReport = (e, postId) => {
         e.stopPropagation();
-        setReportPostId(postId);
+        setReportPostId({ id: postId, type: 'post' });
         setIsReportModalOpen(true);
     };
 

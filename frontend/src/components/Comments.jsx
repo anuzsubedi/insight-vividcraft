@@ -20,6 +20,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null); // Change variable name
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const toast = useToast();
 
@@ -95,6 +96,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
 
   // Add handleReport function
   const handleReport = () => {
+    setReportTarget({ id: comment.id, type: 'comment' });
     setIsReportModalOpen(true);
   };
 
@@ -341,8 +343,11 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
       {level === 0 && <Divider my={4} />}
       <ReportModal
         isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        postId={comment.id}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setReportTarget(null);
+        }}
+        postId={reportTarget} // Fix prop name to match the state
       />
     </Box>
   );

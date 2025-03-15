@@ -51,7 +51,8 @@ function ReportModal({ isOpen, onClose, postId }) {
     setIsSubmitting(true);
     try {
       await reportService.createReport({
-        postId,
+        targetId: postId.id,
+        targetType: postId.type,
         category,
         reason: category === 'Other' ? reason : ''
       });
@@ -137,7 +138,10 @@ function ReportModal({ isOpen, onClose, postId }) {
 ReportModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
-  postId: PropTypes.string.isRequired
+  postId: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    type: PropTypes.oneOf(['post', 'comment']).isRequired
+  }).isRequired
 };
 
 export default ReportModal;
