@@ -63,5 +63,8 @@ export const ENDPOINTS = {
     },
     REPORTS: {
         CREATE: '/reports'
+    },
+    MENTIONS: {
+        SUGGEST: '/mentions/suggest'
     }
 };
