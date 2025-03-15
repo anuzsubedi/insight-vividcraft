@@ -1,64 +1,67 @@
 export const ENDPOINTS = {
     HEALTH: '/health',
     AUTH: {
-        LOGIN: '/api/auth/login',
-        SIGNUP: '/api/auth/signup',
-        VERIFY_EMAIL: '/api/auth/verify-email',
-        VALIDATE_SESSION: '/api/auth/validate-session',
-        REQUEST_PASSWORD_RESET: '/api/auth/request-password-reset',
-        RESET_PASSWORD: '/api/auth/reset-password',
-        REQUEST_EMAIL_CHANGE: '/api/auth/request-email-change',
-        VERIFY_EMAIL_CHANGE: '/api/auth/verify-email-change',
-        UPDATE_PASSWORD: '/api/auth/update-password',
+        LOGIN: '/auth/login',
+        SIGNUP: '/auth/signup',
+        VERIFY_EMAIL: '/auth/verify-email',
+        VALIDATE_SESSION: '/auth/validate-session',
+        REQUEST_PASSWORD_RESET: '/auth/request-password-reset',
+        RESET_PASSWORD: '/auth/reset-password',
+        REQUEST_EMAIL_CHANGE: '/auth/request-email-change',
+        VERIFY_EMAIL_CHANGE: '/auth/verify-email-change',
+        UPDATE_PASSWORD: '/auth/update-password',
     },
     PROFILE: {
-        GET: '/api/profile',
-        UPDATE: '/api/profile/update',
-        GET_BY_USERNAME: (username) => `/api/profile/${username}`,
+        GET: '/profile',
+        UPDATE: '/profile/update',
+        GET_BY_USERNAME: (username) => `/profile/${username}`,
     },
     SOCIAL: {
-        FOLLOW: (username) => `/api/social/follow/${username}`,
-        UNFOLLOW: (username) => `/api/social/follow/${username}`, // DELETE method
-        MUTE: (username) => `/api/social/mute/${username}`,
-        UNMUTE: (username) => `/api/social/mute/${username}`, // DELETE method
-        GET_STATUS: (username) => `/api/social/status/${username}`,
-        GET_FOLLOWING: (username) => `/api/social/${username}/following`,
-        GET_FOLLOWERS: (username) => `/api/social/${username}/followers`,
-        GET_MUTUAL: (username) => `/api/social/${username}/mutual`,
-        REMOVE_FOLLOWER: (username) => `/api/social/remove-follower/${username}`
+        FOLLOW: (username) => `/social/follow/${username}`,
+        UNFOLLOW: (username) => `/social/follow/${username}`, // DELETE method
+        MUTE: (username) => `/social/mute/${username}`,
+        UNMUTE: (username) => `/social/mute/${username}`, // DELETE method
+        GET_STATUS: (username) => `/social/status/${username}`,
+        GET_FOLLOWING: (username) => `/social/${username}/following`,
+        GET_FOLLOWERS: (username) => `/social/${username}/followers`,
+        GET_MUTUAL: (username) => `/social/${username}/mutual`,
+        REMOVE_FOLLOWER: (username) => `/social/remove-follower/${username}`
     },
     POSTS: {
-        CREATE: '/api/posts',
-        UPDATE: (id) => `/api/posts/${id}`,
-        DELETE: (id) => `/api/posts/${id}`,
-        LIST: '/api/posts',
-        GET_USER_POSTS: (username) => `/api/posts/user/${username}`,
-        PUBLISH: (id) => `/api/posts/${id}/publish`,
-        PUBLISH_DUE: '/api/posts/scheduled/publish-due',
-        PUBLISH_SCHEDULED: '/api/posts/scheduled/publish-due',
-        GET: (id) => `/api/posts/${id}`,
+        CREATE: '/posts',
+        UPDATE: (id) => `/posts/${id}`,
+        DELETE: (id) => `/posts/${id}`,
+        LIST: '/posts',
+        GET_USER_POSTS: (username) => `/posts/user/${username}`,
+        PUBLISH: (id) => `/posts/${id}/publish`,
+        PUBLISH_DUE: '/posts/scheduled/publish-due',
+        PUBLISH_SCHEDULED: '/posts/scheduled/publish-due',
+        GET: (id) => `/posts/${id}`,
     },
     CATEGORIES: {
-        LIST: '/api/categories',
-        CREATE: '/api/categories',
-        UPDATE: (id) => `/api/categories/${id}`,
-        DELETE: (id) => `/api/categories/${id}`
+        LIST: '/categories',
+        CREATE: '/categories',
+        UPDATE: (id) => `/categories/${id}`,
+        DELETE: (id) => `/categories/${id}`
     },
     FEED: {
-        FOLLOWING: '/api/feed/following',
-        NETWORK: '/api/feed/network', // Changed from EXTENDED
-        EXPLORE: '/api/feed/explore',
+        FOLLOWING: '/feed/following',
+        NETWORK: '/feed/network',
+        EXPLORE: '/feed/explore'
     },
     COMMENTS: {
-        GET_POST_COMMENTS: (postId) => `api/comments/${postId}`,
-        CREATE_COMMENT: 'api/comments',
-        UPDATE_COMMENT: (id) => `api/comments/${id}`,
-        DELETE_COMMENT: (id) => `api/comments/${id}`,
-        ADD_REACTION: (id) => `api/comments/${id}/reactions`,
-        GET_REACTIONS: (id) => `api/comments/${id}/reactions`,
+        GET_POST_COMMENTS: (postId) => `/comments/post/${postId}`,
+        CREATE_COMMENT: '/comments',
+        UPDATE_COMMENT: (id) => `/comments/${id}`,
+        DELETE_COMMENT: (id) => `/comments/${id}`,
+        ADD_REACTION: (id) => `/comments/${id}/reactions`,
+        GET_REACTIONS: (id) => `/comments/${id}/reactions`,
     },
     SEARCH: {
-        USERS: '/api/search/users',
-        POSTS: '/api/search/posts'
+        USERS: '/search/users',
+        POSTS: '/search/posts'
+    },
+    REPORTS: {
+        CREATE: '/reports'
     }
 };

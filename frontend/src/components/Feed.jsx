@@ -19,6 +19,7 @@ import {
     IconButton,
 } from '@chakra-ui/react';
 import { BiUpvote, BiDownvote, BiComment, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
+import { FaBan } from 'react-icons/fa'; // Add this import
 import { feedService } from '../services/feedService';
 import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
@@ -27,6 +28,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CreatePost from './CreatePost';
 import useAuthState from '../hooks/useAuthState';
+import ReportModal from './ReportModal';
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -51,6 +53,8 @@ function Feed() {
     const { user } = useAuthState();
     const [sortType, setSortType] = useState('recent');
     const [sortPeriod, setSortPeriod] = useState('all');
+    const [reportPostId, setReportPostId] = useState(null);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     // Load categories on mount
     useEffect(() => {
@@ -240,6 +244,12 @@ function Feed() {
 
     const handlePostClick = (postId) => {
         navigate(`/posts/${postId}`, { state: { from: location.pathname } });
+    };
+
+    const handleReport = (e, postId) => {
+        e.stopPropagation();
+        setReportPostId(postId);
+        setIsReportModalOpen(true);
     };
 
     return (
@@ -437,6 +447,17 @@ function Feed() {
                                 <BiComment size={20} />
                                 <Text>{post.comment_count || 0}</Text>
                             </HStack>
+                            <HStack spacing={2}>
+                                <IconButton
+                                    icon={<FaBan />}
+                                    variant="ghost"
+                                    size="sm"
+                                    color="gray.500"
+                                    aria-label="Forbid"
+                                    onClick={(e) => handleReport(e, post.id)}
+                                    _hover={{ color: "red.500", bg: "red.50" }}
+                                />
+                            </HStack>
                         </HStack>
                     </Box>
                 ))}
@@ -462,6 +483,15 @@ function Feed() {
 
                 {hasMore && !isLoading && <Box ref={ref} h="20px" />}
             </VStack>
+
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => {
+                    setIsReportModalOpen(false);
+                    setReportPostId(null);
+                }}
+                postId={reportPostId}
+            />
         </VStack>
     );
 }
