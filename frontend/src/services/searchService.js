@@ -50,5 +50,17 @@ export const searchService = {
             }
             throw new Error(error.response?.data?.error || 'Failed to search posts');
         }
+    },
+
+    async getMentionSuggestions(query, limit = 5) {
+        try {
+            const response = await api.get(ENDPOINTS.MENTIONS.SUGGEST, {
+                params: { query, limit }
+            });
+            return response.data;
+        } catch (error) {
+            console.error('[GET MENTION SUGGESTIONS] Error:', error);
+            throw error;
+        }
     }
 };
