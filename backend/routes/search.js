@@ -53,6 +53,30 @@ router.get('/users', async (req, res) => {
     }
 });
 
+// Update mention search endpoint to use q parameter
+router.get('/mention', async (req, res) => {
+    try {
+        const { q } = req.query; // Change from query to q
+        
+        if (!q) {
+            return res.json({ users: [] });
+        }
+
+        const { data: users, error } = await supabase
+            .from('users')
+            .select('id, username, display_name, avatar_name')
+            .or(`username.ilike.%${q}%, display_name.ilike.%${q}%`)
+            .limit(5);
+
+        if (error) throw error;
+
+        res.json({ users: users || [] });
+    } catch (error) {
+        console.error('Error searching users for mention:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Search posts and articles
 router.get('/posts', async (req, res) => {
     try {

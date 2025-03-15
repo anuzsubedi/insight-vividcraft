@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text, VStack, HStack, Input, Button, Avatar, IconButton, useToast, Divider, Collapse, Menu, MenuButton, MenuList, MenuItem } from '@chakra-ui/react';
 import { FiMoreHorizontal, FiMessageCircle, FiEdit, FiTrash2, FiFlag } from 'react-icons/fi';
 import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
@@ -8,6 +8,8 @@ import useAuthState from '../hooks/useAuthState';
 import PropTypes from 'prop-types';
 import { formatDistanceToNow } from 'date-fns';
 import ReportModal from './ReportModal';
+import { mentionService } from '../services/mentionService';
+import MentionDropdown from './MentionDropdown';
 
 // Helper function to calculate net score
 const getNetScore = (upvotes = 0, downvotes = 0) => {
@@ -386,6 +388,9 @@ function Comments({ postId }) {
   const [newComment, setNewComment] = useState('');
   const { user } = useAuthState();
   const toast = useToast();
+  const [mentionUsers, setMentionUsers] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const inputRef = useRef(null);
 
   const organizeComments = (flatComments) => {
     const rootComments = [];
@@ -657,17 +662,50 @@ function Comments({ postId }) {
     }
   };
 
+  const handleInput = async (e) => {
+    const text = e.target.value;
+    setNewComment(text);
+
+    // Handle mention detection
+    const lastAtIndex = text.lastIndexOf('@');
+    if (lastAtIndex >= 0 && text.slice(lastAtIndex + 1).indexOf(' ') === -1) {
+      const query = text.slice(lastAtIndex + 1);
+      setMentionQuery(query);
+      const users = await mentionService.searchUsers(query);
+      setMentionUsers(users);
+    } else {
+      setMentionUsers([]);
+    }
+  };
+
+  const handleMentionSelect = (user) => {
+    const text = newComment;
+    const lastAtIndex = text.lastIndexOf('@');
+    const newText = text.slice(0, lastAtIndex) + `@${user.username} `;
+    setNewComment(newText);
+    setMentionUsers([]);
+    inputRef.current?.focus();
+  };
+
   return (
     <VStack align="stretch" spacing={4}>
-      <Box as="form" onSubmit={handleSubmit}>
+      <Box as="form" onSubmit={handleSubmit} position="relative">
         <Input
+          ref={inputRef}
           value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
+          onChange={handleInput}
           placeholder={user ? "Write a comment..." : "Please login to comment"}
           disabled={!user}
           bg="gray.50"
           mb={2}
         />
+        {mentionUsers.length > 0 && (
+          <MentionDropdown 
+            users={mentionUsers}
+            onSelect={handleMentionSelect}
+            position={{ top: "calc(100% + 5px)" }}
+          />
+        )}
         {user && (
           <Button type="submit" isDisabled={!newComment.trim()}>
             Comment
