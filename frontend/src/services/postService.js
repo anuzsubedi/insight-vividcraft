@@ -59,7 +59,7 @@ export const postService = {
     // Reaction operations
     async addReaction(postId, type) {
         try {
-            const response = await api.post(`/api/posts/${postId}/reactions`, { type });
+            const response = await api.post(ENDPOINTS.POSTS.ADD_REACTION(postId), { type });
             return response.data;
         } catch (error) {
             console.error('[ADD REACTION] Error:', error);
@@ -69,7 +69,7 @@ export const postService = {
 
     async getReactions(postId) {
         try {
-            const response = await api.get(`/api/posts/${postId}/reactions`);
+            const response = await api.get(ENDPOINTS.POSTS.GET_REACTIONS(postId));
             return response.data;
         } catch (error) {
             console.error('[GET REACTIONS] Error:', error);
