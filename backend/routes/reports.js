@@ -6,19 +6,20 @@ const router = express.Router();
 
 // Allowed report categories
 const VALID_CATEGORIES = ['Spam', 'Violence and Sex', 'Promotes Bullying', 'Other'];
+const VALID_TARGET_TYPES = ['post', 'comment'];
 
 // Create a new report
 router.post('/', verifyToken, async (req, res) => {
   try {
-    const { postId, category, reason } = req.body;
+    const { targetId, targetType, category, reason } = req.body;
     const userId = req.user.userId;
 
     // Validate required fields
-    if (!postId || !category) {
-      return res.status(400).json({ error: 'Post ID and category are required' });
+    if (!targetId || !targetType || !category) {
+      return res.status(400).json({ error: 'Target ID, target type, and category are required' });
     }
 
-    // Validate category is one of the allowed values
+    // Validate category and target type
     if (!VALID_CATEGORIES.includes(category)) {
       return res.status(400).json({ 
         error: 'Invalid category',
@@ -26,15 +27,22 @@ router.post('/', verifyToken, async (req, res) => {
       });
     }
 
+    if (!VALID_TARGET_TYPES.includes(targetType)) {
+      return res.status(400).json({
+        error: 'Invalid target type',
+        validTypes: VALID_TARGET_TYPES
+      });
+    }
+
     // Insert report into database
     const { data, error } = await supabase
       .from('reports')
       .insert([{
-        post_id: postId,
+        target_id: targetId,
+        target_type: targetType,
         user_id: userId,
         category,
-        reason: reason || '', // Ensure reason has a default empty string
-        // created_at will be set automatically by Supabase default value
+        reason: reason || '', 
       }])
       .select()
       .single();

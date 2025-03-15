@@ -2,10 +2,11 @@ import api from '../api/axios';
 import { ENDPOINTS } from '../api/endpoints';
 
 class ReportService {
-  async createReport({ postId, category, reason }) {
+  async createReport({ targetId, targetType, category, reason }) {
     try {
       const response = await api.post(ENDPOINTS.REPORTS.CREATE, {
-        postId,
+        targetId,
+        targetType,
         category,
         reason
       });
