@@ -10,13 +10,16 @@ import { formatDistanceToNow } from 'date-fns';
 import ReportModal from './ReportModal';
 import { mentionService } from '../services/mentionService';
 import MentionDropdown from './MentionDropdown';
+import { searchService } from "../services/searchService";
+import { Link } from 'react-router-dom';
 
 // Helper function to calculate net score
 const getNetScore = (upvotes = 0, downvotes = 0) => {
   return parseInt(upvotes) - parseInt(downvotes);
 };
 
-const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, level = 0 }) => {
+// Update the CommentThread props to include processedComments
+const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, level = 0, processedComments }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isReplying, setIsReplying] = useState(false);
@@ -252,7 +255,23 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
             ) : (
               <>
                 <Text mb={2} whiteSpace="pre-wrap" color={showDeletedContent ? "gray.500" : "inherit"}>
-                  {showDeletedContent ? (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') : comment.content}
+                  {showDeletedContent ? (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') : processedComments[comment.id]?.map((segment, index) => (
+                    segment.type === 'mention' && segment.isValid ? (
+                      <Link
+                        key={index}
+                        to={`/user/${segment.content}`}
+                        color="blue.500"
+                        fontWeight="medium"
+                        _hover={{ textDecoration: 'underline' }}
+                      >
+                        @{segment.content}
+                      </Link>
+                    ) : (
+                      <Text as="span" key={index}>
+                        {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+                      </Text>
+                    )
+                  )) || comment.content}
                 </Text>
 
                 {!isDeleted && !isRemoved && (
@@ -337,6 +356,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
                 onRemove={onRemove}
                 onReply={onReply}
                 level={level + 1}
+                processedComments={processedComments}
               />
             ))}
           </Box>
@@ -380,7 +400,8 @@ CommentThread.propTypes = {
   onDelete: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,
   onReply: PropTypes.func.isRequired,
-  level: PropTypes.number
+  level: PropTypes.number,
+  processedComments: PropTypes.object
 };
 
 function Comments({ postId }) {
@@ -391,6 +412,7 @@ function Comments({ postId }) {
   const [mentionUsers, setMentionUsers] = useState([]);
   const [mentionQuery, setMentionQuery] = useState('');
   const inputRef = useRef(null);
+  const [processedComments, setProcessedComments] = useState({});
 
   const organizeComments = (flatComments) => {
     const rootComments = [];
@@ -687,6 +709,104 @@ function Comments({ postId }) {
     inputRef.current?.focus();
   };
 
+  const processMentions = async (text) => {
+    const segments = [];
+    let lastIndex = 0;
+    const mentionRegex = /@(\w+)/g;
+    let match;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        segments.push({
+          type: 'text',
+          content: text.slice(lastIndex, match.index)
+        });
+      }
+
+      const username = match[1];
+      try {
+        const response = await searchService.searchUsers(username);
+        const userExists = response.users.some(user => user.username === username);
+        
+        segments.push({
+          type: 'mention',
+          content: username,
+          isValid: userExists
+        });
+      } catch (error) {
+        segments.push({
+          type: 'mention',
+          content: username,
+          isValid: false
+        });
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      segments.push({
+        type: 'text',
+        content: text.slice(lastIndex)
+      });
+    }
+
+    return segments;
+  };
+
+  // Add this effect to process mentions when comments load or change
+  useEffect(() => {
+    const processAllComments = async () => {
+      const processed = {};
+      
+      // Helper function to process nested comments
+      const processCommentTree = async (commentList) => {
+        for (const comment of commentList) {
+          processed[comment.id] = await processMentions(comment.content);
+          if (comment.replies && comment.replies.length > 0) {
+            await processCommentTree(comment.replies);
+          }
+        }
+      };
+
+      if (comments.length > 0) {
+        await processCommentTree(comments);
+      }
+      setProcessedComments(processed);
+    };
+
+    processAllComments();
+  }, [comments]);
+
+  // Modify the comment rendering part to use processed text
+  const renderComment = (comment) => (
+    <Box key={comment.id}>
+      // ...existing avatar and metadata...
+      
+      <Text fontSize="md" color="gray.700" mt={2}>
+        {processedComments[comment.id]?.map((segment, index) => (
+          segment.type === 'mention' && segment.isValid ? (
+            <Link
+              key={index}
+              to={`/user/${segment.content}`}
+              color="blue.500"
+              fontWeight="medium"
+              _hover={{ textDecoration: 'underline' }}
+            >
+              @{segment.content}
+            </Link>
+          ) : (
+            <Text as="span" key={index}>
+              {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+            </Text>
+          )
+        )) || comment.body}
+      </Text>
+      
+      // ...existing comment actions...
+    </Box>
+  );
+
   return (
     <VStack align="stretch" spacing={4}>
       <Box as="form" onSubmit={handleSubmit} position="relative">
@@ -723,6 +843,7 @@ function Comments({ postId }) {
             onDelete={handleDelete}
             onRemove={handleRemove}
             onReply={handleReply}
+            processedComments={processedComments}
           />
         ))}
       </VStack>
