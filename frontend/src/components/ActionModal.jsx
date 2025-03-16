@@ -187,8 +187,48 @@ function ActionModal({ isOpen, onClose, onConfirm, report }) {
                 <FormLabel fontWeight="medium">Action to Take:</FormLabel>
                 <RadioGroup value={selectedAction} onChange={setSelectedAction}>
                   <VStack align="start" spacing={3}>
-                    <Radio value="dismiss">Dismiss Report</Radio>
-                    <Radio value={`delete_${report.target_type}`}>
+                    <Radio 
+                      value="dismiss"
+                      size="lg"
+                      borderColor="gray.300"
+                      borderWidth="2px"
+                      _hover={{
+                        borderColor: 'teal.300'
+                      }}
+                      css={{
+                        '[data-checked] &': {
+                          '& > span:first-of-type': {
+                            background: 'var(--chakra-colors-teal-500)',
+                            borderColor: 'var(--chakra-colors-teal-500)',
+                          },
+                          '& > span:first-of-type > span': {
+                            opacity: 0
+                          }
+                        }
+                      }}
+                    >
+                      Dismiss Report
+                    </Radio>
+                    <Radio 
+                      value={`delete_${report.target_type}`}
+                      size="lg"
+                      borderColor="gray.300"
+                      borderWidth="2px"
+                      _hover={{
+                        borderColor: 'teal.300'
+                      }}
+                      css={{
+                        '[data-checked] &': {
+                          '& > span:first-of-type': {
+                            background: 'var(--chakra-colors-teal-500)',
+                            borderColor: 'var(--chakra-colors-teal-500)',
+                          },
+                          '& > span:first-of-type > span': {
+                            opacity: 0
+                          }
+                        }
+                      }}
+                    >
                       Delete {report.target_type === 'post' ? 'Post' : 'Comment'}
                     </Radio>
                   </VStack>
@@ -284,19 +324,19 @@ function ActionModal({ isOpen, onClose, onConfirm, report }) {
             Cancel
           </Button>
           <Button
-            bg="accent.500"
+            bg="teal.500"
             color="white"
             onClick={handleSubmit}
             borderWidth="2px"
             borderColor="black"
             boxShadow="4px 4px 0 black"
             _hover={{
-              bg: 'accent.600',
+              bg: 'teal.600',
               transform: 'translate(-1px, -1px)',
               boxShadow: '5px 5px 0 black'
             }}
             _active={{
-              bg: 'accent.700',
+              bg: 'teal.700',
               transform: 'translate(0, 0)',
               boxShadow: '2px 2px 0 black'
             }}
@@ -315,6 +355,7 @@ ActionModal.propTypes = {
   onConfirm: PropTypes.func.isRequired,
   report: PropTypes.shape({
     id: PropTypes.string.isRequired,
+    target_id: PropTypes.string.isRequired,
     target_type: PropTypes.oneOf(['post', 'comment']).isRequired,
     category: PropTypes.string.isRequired,
     reason: PropTypes.string,
