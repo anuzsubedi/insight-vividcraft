@@ -282,13 +282,29 @@ router.post("/reset-password", async (req, res) => {
 // Validate session
 router.get("/validate-session", verifyToken, async (req, res) => {
     try {
-        // If verifyToken middleware passed, the token is valid
+        // Get full user data to include isAdmin
+        const { data: user, error } = await supabase
+            .from("users")
+            .select("id, username, email, is_admin, display_name, avatar_name")
+            .eq("id", req.user.userId)
+            .single();
+
+        if (error || !user) {
+            return res.status(401).json({
+                isValid: false,
+                error: "User not found"
+            });
+        }
+
         return res.status(200).json({
             isValid: true,
             user: {
-                userId: req.user.userId,
-                username: req.user.username,
-                email: req.user.email
+                userId: user.id,
+                username: user.username,
+                email: user.email,
+                displayName: user.display_name,
+                avatarName: user.avatar_name || "",
+                isAdmin: user.is_admin || false
             }
         });
     } catch (error) {

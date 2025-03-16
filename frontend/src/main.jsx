@@ -18,6 +18,8 @@ import NotFound from "./pages/NotFound";
 import UserNotFound from "./pages/UserNotFound";
 import Search from "./pages/Search";
 import AuthProvider from "./components/AuthProvider";
+import AdminPage from "./pages/AdminPage";
+import AdminRoute from "./components/AdminRoute";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -38,6 +40,14 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <Route path="/posts/:id/edit" element={<EditPost />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/search" element={<Search />} />
+            <Route 
+              path="/admin" 
+              element={
+                <AdminRoute>
+                  <AdminPage />
+                </AdminRoute>
+              } 
+            />
             <Route path="/user-not-found" element={<UserNotFound />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

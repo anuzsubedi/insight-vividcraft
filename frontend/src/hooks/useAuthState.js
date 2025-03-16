@@ -6,7 +6,13 @@ const useAuthState = create(
         (set) => ({
             user: null,
             isAuthenticated: false,
-            setUser: (user) => set({ user, isAuthenticated: !!user }),
+            setUser: (user) => set({ 
+                user: user ? {
+                    ...user,
+                    isAdmin: user.isAdmin || false // Ensure isAdmin is always boolean
+                } : null, 
+                isAuthenticated: !!user 
+            }),
             logout: () => {
                 localStorage.removeItem('token'); // Clear the token
                 set({ user: null, isAuthenticated: false });
