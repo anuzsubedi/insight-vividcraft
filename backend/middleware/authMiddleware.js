@@ -18,7 +18,7 @@ export const verifyToken = async (req, res, next) => {
         // Verify user exists and is active in database
         const { data: user, error } = await supabase
             .from('users')
-            .select('id, username, email')
+            .select('id, username, email, is_admin')
             .eq('id', decoded.userId)
             .single();
 
@@ -30,7 +30,8 @@ export const verifyToken = async (req, res, next) => {
         req.user = {
             userId: user.id,
             username: user.username,
-            email: user.email
+            email: user.email,
+            isAdmin: user.is_admin || false
         };
         next();
     } catch (error) {
@@ -62,7 +63,7 @@ export const optionalAuth = async (req, res, next) => {
         // Verify user exists and is active in database
         const { data: user, error } = await supabase
             .from('users')
-            .select('id, username, email')
+            .select('id, username, email, is_admin')
             .eq('id', decoded.userId)
             .single();
 
@@ -70,7 +71,8 @@ export const optionalAuth = async (req, res, next) => {
             req.user = {
                 userId: user.id,
                 username: user.username,
-                email: user.email
+                email: user.email,
+                isAdmin: user.is_admin || false
             };
         }
         next();

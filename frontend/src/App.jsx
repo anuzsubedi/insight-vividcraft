@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import {
   Button,
   Text,
@@ -187,6 +187,16 @@ function App() {
                   >
                     Create New Post
                   </MenuItem>
+                  {user.isAdmin && (
+                    <MenuItem
+                      as={Link}
+                      to="/admin"
+                      borderRadius="0"
+                      _hover={{ bg: "paper.100" }}
+                    >
+                      Admin Dashboard
+                    </MenuItem>
+                  )}
                   <Divider my={2} borderColor="paper.200" />
                   <MenuItem
                     borderRadius="0"
