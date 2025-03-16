@@ -3,16 +3,38 @@ import { supabase } from "../config/supabaseClient.js";
 // Check if user has active restrictions
 export async function checkUserRestrictions(userId) {
     const now = new Date().toISOString();
+    console.log('Checking restrictions for user:', userId);
     const { data: restrictions } = await supabase
         .from("user_restrictions")
-        .select("restriction_type")
+        .select("restriction_type, expires_at, reason")
         .eq("user_id", userId)
         .or(`expires_at.gt.${now},expires_at.is.null`);
 
+    const getRestrictionInfo = (type) => {
+        const restriction = restrictions?.find(r => r.restriction_type === type);
+        return restriction ? {
+            restricted: true,
+            expiresAt: restriction.expires_at,
+            reason: restriction.reason
+        } : {
+            restricted: false,
+            expiresAt: null,
+            reason: null
+        };
+    };
+
+    const banInfo = getRestrictionInfo('ban');
+    const postBanInfo = getRestrictionInfo('post_ban');
+    const commentBanInfo = getRestrictionInfo('comment_ban');
+
     return {
-        isBanned: restrictions?.some(r => r.restriction_type === 'ban') || false,
-        isPostBanned: restrictions?.some(r => r.restriction_type === 'post_ban') || false,
-        isCommentBanned: restrictions?.some(r => r.restriction_type === 'comment_ban') || false
+        isBanned: banInfo.restricted,
+        isPostBanned: postBanInfo.restricted || banInfo.restricted,
+        isCommentBanned: commentBanInfo.restricted || banInfo.restricted,
+        postBanExpiresAt: postBanInfo.expiresAt || banInfo.expiresAt,
+        postBanReason: postBanInfo.reason || banInfo.reason,
+        commentBanExpiresAt: commentBanInfo.expiresAt || banInfo.expiresAt,
+        commentBanReason: commentBanInfo.reason || banInfo.reason
     };
 }
 
@@ -28,7 +50,9 @@ export const canPost = async (req, res, next) => {
         
         if (restrictions.isBanned || restrictions.isPostBanned) {
             return res.status(403).json({ 
-                error: "You are currently restricted from creating posts" 
+                error: "You are currently restricted from creating posts",
+                expiresAt: restrictions.postBanExpiresAt,
+                reason: restrictions.postBanReason
             });
         }
 
@@ -51,7 +75,9 @@ export const canComment = async (req, res, next) => {
         
         if (restrictions.isBanned || restrictions.isCommentBanned) {
             return res.status(403).json({ 
-                error: "You are currently restricted from commenting" 
+                error: "You are currently restricted from commenting",
+                expiresAt: restrictions.commentBanExpiresAt,
+                reason: restrictions.commentBanReason
             });
         }
 

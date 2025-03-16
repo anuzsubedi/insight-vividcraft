@@ -27,6 +27,8 @@ import {
     FormControl,
     Alert,
     AlertIcon,
+    AlertTitle,
+    AlertDescription,
 } from '@chakra-ui/react';
 import { FiClock, FiChevronDown } from 'react-icons/fi';
 import { postService } from '../services/postService';
@@ -45,6 +47,7 @@ function CreatePost({ onPostCreated }) {
     const [isCreatingPost, setIsCreatingPost] = useState(false);
     const [canUserPost, setCanUserPost] = useState(true);
     const [postingError, setPostingError] = useState(null);
+    const [banMessage, setBanMessage] = useState(null);
     const toast = useToast();
     const [mentionUsers, setMentionUsers] = useState([]);
     const [mentionQuery, setMentionQuery] = useState('');
@@ -73,23 +76,27 @@ function CreatePost({ onPostCreated }) {
                 
                 setCategories(categoriesResponse.categories || []);
                 setCanUserPost(permissionsResponse.canPost);
-                // Clear error if user has permission to post
+                
                 if (permissionsResponse.canPost) {
                     setPostingError(null);
+                    setBanMessage(null);
                 } else {
-                    // Set error message from server response
-                    setPostingError(permissionsResponse.reason || "You are not allowed to create posts at this time.");
+                    setPostingError("You are not allowed to create posts at this time.");
+                    setBanMessage(permissionsResponse.message || "You are banned from making posts.");
                 }
             } catch (error) {
                 console.error('Error loading initial data:', error);
                 setCanUserPost(false);
-                setPostingError(error.message || "Failed to verify posting permissions");
-                toast({
-                    title: 'Error',
-                    description: error.message,
-                    status: 'error',
-                    duration: 3000,
-                });
+                setPostingError("You are not allowed to create posts at this time.");
+                setBanMessage(error.response?.data?.message || "You are banned from making posts.");
+                if (!error.response?.status === 403) {
+                    toast({
+                        title: 'Error',
+                        description: error.message,
+                        status: 'error',
+                        duration: 3000,
+                    });
+                }
             }
         };
         loadInitialData();
@@ -272,7 +279,10 @@ function CreatePost({ onPostCreated }) {
                 {!canUserPost && (
                     <Alert status="error" mb={4} variant="left-accent">
                         <AlertIcon />
-                        {postingError || "You are not allowed to create posts at this time."}
+                        <Box>
+                            <AlertTitle>Posting Restricted</AlertTitle>
+                            <AlertDescription>{banMessage}</AlertDescription>
+                        </Box>
                     </Alert>
                 )}
 

@@ -16,9 +16,14 @@ router.get("/can-post", verifyToken, async (req, res) => {
         const restrictions = await checkUserRestrictions(userId);
         
         if (restrictions.isBanned || restrictions.isPostBanned) {
+            const expiryDate = restrictions.postBanExpiresAt;
+            const expiryText = expiryDate ? new Date(expiryDate).toLocaleDateString() : 'indefinitely';
             return res.status(403).json({ 
+                canPost: false,
                 error: "You are currently restricted from creating posts",
-                canPost: false 
+                reason: restrictions.postBanReason || "You have been banned from creating posts",
+                expiresAt: restrictions.postBanExpiresAt,
+                message: `You are banned from making posts until ${expiryText}. Reason: ${restrictions.postBanReason || 'No reason provided'}`
             });
         }
 
