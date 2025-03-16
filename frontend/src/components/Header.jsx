@@ -11,7 +11,7 @@ import {
   MenuItem,
   Divider,
 } from "@chakra-ui/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Logo from "./Logo";
 import SearchDropdown from "./SearchDropdown";
@@ -20,6 +20,15 @@ import PropTypes from 'prop-types';
 const MotionBox = motion(Box);
 
 const Header = ({ user, isAdmin }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    // Clear auth token from localStorage
+    localStorage.removeItem('token');
+    // Navigate to login page
+    navigate('/login');
+  };
+
   return (
     <Box
       py={4}
@@ -98,14 +107,6 @@ const Header = ({ user, isAdmin }) => {
                 >
                   Settings
                 </MenuItem>
-                <MenuItem
-                  as={Link}
-                  to="/posts/new"
-                  borderRadius="0"
-                  _hover={{ bg: "paper.100" }}
-                >
-                  Create New Post
-                </MenuItem>
                 {isAdmin && (
                   <MenuItem
                     as={Link}
@@ -118,12 +119,11 @@ const Header = ({ user, isAdmin }) => {
                 )}
                 <Divider my={2} borderColor="paper.200" />
                 <MenuItem
-                  as={Link}
-                  to="/"
+                  onClick={handleLogout}
                   borderRadius="0"
-                  _hover={{ bg: "paper.100" }}
+                  _hover={{ bg: "red.50", color: "red.600" }}
                 >
-                  Back to Dashboard
+                  Logout
                 </MenuItem>
               </MenuList>
             </Menu>

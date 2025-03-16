@@ -62,9 +62,22 @@ export const ENDPOINTS = {
         POSTS: '/search/posts'
     },
     REPORTS: {
-        CREATE: '/reports'
+        CREATE: '/reports',
+        CATEGORIES: '/reports/categories'
     },
     MENTIONS: {
         SUGGEST: '/mentions/suggest'
+    },
+    ADMIN: {
+        GET_ADMINS: '/admin/admins',
+        ADD_ADMIN: '/admin/admins',
+        REMOVE_ADMIN: (username) => `/admin/admins/${username}`,
+        SEARCH_USERS: '/admin/search-users',
+        GET_REPORTS: '/admin/reports',
+        REVIEW_REPORT: (reportId) => `/admin/reports/${reportId}/review`,
+        RESTRICT_USER: (userId) => `/admin/users/${userId}/restrict`,
+        GET_USER_RESTRICTIONS: (userId) => `/admin/users/${userId}/restrictions`,
+        GET_ACTIONS: '/admin/actions',
+        GET_MODERATION_HISTORY: '/admin/moderation/history'
     }
 };
