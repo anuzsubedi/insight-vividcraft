@@ -155,23 +155,6 @@ router.get("/reports", verifyToken, isAdmin, async (req, res) => {
                         username,
                         display_name
                     )
-                ),
-                post:posts (
-                    id,
-                    title,
-                    content,
-                    author:users (
-                        username,
-                        display_name
-                    )
-                ),
-                comment:comments (
-                    id,
-                    content,
-                    author:users (
-                        username,
-                        display_name
-                    )
                 )
             `);
 
@@ -208,18 +191,62 @@ router.get("/reports", verifyToken, isAdmin, async (req, res) => {
             throw error;
         }
 
+        // Group reports by target type to fetch content in batches
+        const postReports = reports.filter(r => r.target_type === 'post');
+        const commentReports = reports.filter(r => r.target_type === 'comment');
+
+        // Fetch posts content
+        const { data: posts } = postReports.length > 0 ? await supabase
+            .from('posts')
+            .select(`
+                id,
+                title,
+                content,
+                author:users (
+                    username,
+                    display_name
+                )
+            `)
+            .in('id', postReports.map(r => parseInt(r.target_id)))
+            : { data: [] };
+
+        // Fetch comments content
+        const { data: comments } = commentReports.length > 0 ? await supabase
+            .from('comments')
+            .select(`
+                id,
+                content,
+                author:users (
+                    username,
+                    display_name
+                )
+            `)
+            .in('id', commentReports.map(r => r.target_id))
+            : { data: [] };
+
+        // Create lookup maps for faster access
+        const postsMap = Array.isArray(posts) ? posts.reduce((acc, post) => {
+            acc[post.id] = post;
+            return acc;
+        }, {}) : {};
+
+        const commentsMap = Array.isArray(comments) ? comments.reduce((acc, comment) => {
+            acc[comment.id] = comment;
+            return acc;
+        }, {}) : {};
+
         // Transform the reports to include content snippets
-        const transformedReports = (reports || []).map(report => ({
-            ...report,
-            content: report.target_type === 'post' 
-                ? report.post?.content
-                : report.comment?.content,
-            contentAuthor: report.target_type === 'post'
-                ? report.post?.author
-                : report.comment?.author,
-            post: undefined,
-            comment: undefined
-        }));
+        const transformedReports = (reports || []).map(report => {
+            const targetContent = report.target_type === 'post' 
+                ? postsMap[parseInt(report.target_id)]
+                : commentsMap[report.target_id];
+            
+            return {
+                ...report,
+                content: targetContent?.content,
+                contentAuthor: targetContent?.author
+            };
+        });
 
         res.json({ reports: transformedReports });
     } catch (error) {

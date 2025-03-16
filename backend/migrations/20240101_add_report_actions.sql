@@ -61,6 +61,13 @@ CREATE INDEX IF NOT EXISTS idx_content_moderation_target ON content_moderation(t
 CREATE INDEX IF NOT EXISTS idx_content_moderation_admin ON content_moderation(admin_id);
 CREATE INDEX IF NOT EXISTS idx_content_moderation_report ON content_moderation(report_id);
 
+-- Add check constraint to validate target_id format based on target_type
+ALTER TABLE reports ADD CONSTRAINT check_target_id_format
+    CHECK (
+        (target_type = 'post' AND target_id ~ '^\d+$') OR  -- Integer for posts
+        (target_type = 'comment' AND target_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')  -- UUID for comments
+    );
+
 -- Create a trigger to notify admins of new reports
 CREATE OR REPLACE FUNCTION notify_new_report() RETURNS trigger AS $$
 BEGIN

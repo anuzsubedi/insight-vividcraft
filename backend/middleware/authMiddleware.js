@@ -1,6 +1,28 @@
 import jwt from 'jsonwebtoken';
 import { supabase } from '../config/supabaseClient.js';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
+const verifyUserInDb = async (userId, retries = 0) => {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, username, email, is_admin')
+            .eq('id', userId)
+            .single();
+            
+        if (error) throw error;
+        return { user, error: null };
+    } catch (error) {
+        if (retries < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+            return verifyUserInDb(userId, retries + 1);
+        }
+        return { user: null, error };
+    }
+};
+
 export const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
@@ -15,13 +37,9 @@ export const verifyToken = async (req, res, next) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
-        // Verify user exists and is active in database
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('id, username, email, is_admin')
-            .eq('id', decoded.userId)
-            .single();
-
+        // Verify user exists and is active in database with retries
+        const { user, error } = await verifyUserInDb(decoded.userId);
+        
         if (error || !user) {
             console.error('User verification error:', error || 'User not found');
             return res.status(401).json({ error: 'User not found or inactive' });
@@ -59,14 +77,10 @@ export const optionalAuth = async (req, res, next) => {
 
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Verify user exists and is active in database
-        const { data: user, error } = await supabase
-            .from('users')
-            .select('id, username, email, is_admin')
-            .eq('id', decoded.userId)
-            .single();
-
+        
+        // Verify user exists with retries
+        const { user, error } = await verifyUserInDb(decoded.userId);
+        
         if (!error && user) {
             req.user = {
                 userId: user.id,
