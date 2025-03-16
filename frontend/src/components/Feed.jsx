@@ -53,7 +53,7 @@ function Feed() {
     const { user } = useAuthState();
     const [sortType, setSortType] = useState('recent');
     const [sortPeriod, setSortPeriod] = useState('all');
-    const [reportPostId, setReportPostId] = useState(null);
+    const [reportPostId, setReportPostId] = useState({ id: '', type: 'post' });
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     // Load categories on mount
@@ -248,8 +248,10 @@ function Feed() {
 
     const handleReport = (e, postId) => {
         e.stopPropagation();
-        setReportPostId({ id: postId, type: 'post' });
-        setIsReportModalOpen(true);
+        if (postId) {
+            setReportPostId({ id: postId, type: 'post' });
+            setIsReportModalOpen(true);
+        }
     };
 
     return (
@@ -488,7 +490,7 @@ function Feed() {
                 isOpen={isReportModalOpen}
                 onClose={() => {
                     setIsReportModalOpen(false);
-                    setReportPostId(null);
+                    setReportPostId({ id: '', type: 'post' });
                 }}
                 postId={reportPostId}
             />
