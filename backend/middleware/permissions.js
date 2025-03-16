@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabaseClient.js";
 
 // Check if user has active restrictions
-async function checkUserRestrictions(userId) {
+export async function checkUserRestrictions(userId) {
     const now = new Date().toISOString();
     const { data: restrictions } = await supabase
         .from("user_restrictions")

@@ -11,6 +11,9 @@ export const ENDPOINTS = {
         VERIFY_EMAIL_CHANGE: '/auth/verify-email-change',
         UPDATE_PASSWORD: '/auth/update-password',
     },
+    PERMISSIONS: {
+        CAN_POST: '/permissions/can-post'
+    },
     PROFILE: {
         GET: '/profile',
         UPDATE: '/profile/update',

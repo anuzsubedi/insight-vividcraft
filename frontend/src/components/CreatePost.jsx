@@ -25,11 +25,14 @@ import {
     TagLabel,
     TagCloseButton,
     FormControl,
+    Alert,
+    AlertIcon,
 } from '@chakra-ui/react';
 import { FiClock, FiChevronDown } from 'react-icons/fi';
 import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
 import { mentionService } from '../services/mentionService';
+import { permissionsService } from '../services/permissionsService';
 import MentionDropdown from './MentionDropdown';
 
 const MotionBox = motion(Box);
@@ -40,6 +43,8 @@ function CreatePost({ onPostCreated }) {
     const [tagInput, setTagInput] = useState('');
     const [isScheduling, setIsScheduling] = useState(false);
     const [isCreatingPost, setIsCreatingPost] = useState(false);
+    const [canUserPost, setCanUserPost] = useState(true);
+    const [postingError, setPostingError] = useState(null);
     const toast = useToast();
     const [mentionUsers, setMentionUsers] = useState([]);
     const [mentionQuery, setMentionQuery] = useState('');
@@ -57,22 +62,37 @@ function CreatePost({ onPostCreated }) {
         scheduledTime: '00:00',
     });
 
-    // Load categories
+    // Load categories and check permissions
     useEffect(() => {
-        const fetchCategories = async () => {
+        const loadInitialData = async () => {
             try {
-                const response = await categoryService.getCategories();
-                setCategories(response.categories || []);
+                const [categoriesResponse, permissionsResponse] = await Promise.all([
+                    categoryService.getCategories(),
+                    permissionsService.canPost()
+                ]);
+                
+                setCategories(categoriesResponse.categories || []);
+                setCanUserPost(permissionsResponse.canPost);
+                // Clear error if user has permission to post
+                if (permissionsResponse.canPost) {
+                    setPostingError(null);
+                } else {
+                    // Set error message from server response
+                    setPostingError(permissionsResponse.reason || "You are not allowed to create posts at this time.");
+                }
             } catch (error) {
+                console.error('Error loading initial data:', error);
+                setCanUserPost(false);
+                setPostingError(error.message || "Failed to verify posting permissions");
                 toast({
-                    title: 'Error loading categories',
+                    title: 'Error',
                     description: error.message,
                     status: 'error',
                     duration: 3000,
                 });
             }
         };
-        fetchCategories();
+        loadInitialData();
     }, [toast]);
 
     const handlePostSubmit = async (status = 'published') => {
@@ -245,8 +265,17 @@ function CreatePost({ onPostCreated }) {
             bg="white"
             border="2px solid black"
             boxShadow="6px 6px 0 black"
+            opacity={!canUserPost ? 0.7 : 1}
+            pointerEvents={!canUserPost ? "none" : "auto"}
         >
             <Box p={6}>
+                {!canUserPost && (
+                    <Alert status="error" mb={4} variant="left-accent">
+                        <AlertIcon />
+                        {postingError || "You are not allowed to create posts at this time."}
+                    </Alert>
+                )}
+
                 <HStack mb={4} justify="space-between">
                     <HStack>
                         <Text fontWeight="bold">Type:</Text>
@@ -461,6 +490,7 @@ function CreatePost({ onPostCreated }) {
                             borderRadius="0"
                             px={8}
                             isLoading={isCreatingPost}
+                            isDisabled={!canUserPost}
                             _hover={{
                                 transform: "translate(-2px, -2px)",
                                 boxShadow: "4px 4px 0 0 #000",
@@ -479,10 +509,16 @@ function CreatePost({ onPostCreated }) {
                             borderRadius="0"
                             boxShadow="4px 4px 0 black"
                         >
-                            <MenuItem onClick={() => handlePostSubmit('published')}>
+                            <MenuItem 
+                                onClick={() => handlePostSubmit('published')}
+                                isDisabled={!canUserPost}
+                            >
                                 Publish Now
                             </MenuItem>
-                            <MenuItem onClick={() => handlePostSubmit('draft')}>
+                            <MenuItem 
+                                onClick={() => handlePostSubmit('draft')}
+                                isDisabled={!canUserPost}
+                            >
                                 Save as Draft
                             </MenuItem>
                         </MenuList>
