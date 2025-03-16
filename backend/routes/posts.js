@@ -2,6 +2,7 @@ import express from "express";
 import { supabase } from "../config/supabaseClient.js";
 import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
 import { addReactionsToPosts } from "../utils/reactionHelpers.js";
+import { canPost } from "../middleware/permissions.js";
 
 const router = express.Router();
 
@@ -26,8 +27,8 @@ async function generateUniqueSlug(title) {
     return slug;
 }
 
-// Create post
-router.post("/", verifyToken, async (req, res) => {
+// Create post (requires post permission)
+router.post("/", verifyToken, canPost, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
         const authorId = req.user.userId;
@@ -183,8 +184,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 });
 
-// Update post
-router.put("/:id", verifyToken, async (req, res) => {
+// Update post (requires post permission)
+router.put("/:id", verifyToken, canPost, async (req, res) => {
     try {
         const { title, body, type, categoryId, tags, status, scheduledFor } = req.body;
         const postId = req.params.id;

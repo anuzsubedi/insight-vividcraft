@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
 import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
+import { canComment } from '../middleware/permissions.js';
 
 const router = express.Router();
 
@@ -151,8 +152,8 @@ router.get('/post/:postId', optionalAuth, async (req, res) => {
     }
 });
 
-// Create a comment
-router.post('/', verifyToken, async (req, res) => {
+// Create a comment (requires comment permission)
+router.post('/', verifyToken, canComment, async (req, res) => {
   try {
     const { content, postId, parentId } = req.body;
     const userId = req.user.userId;
@@ -218,8 +219,8 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
-// Update a comment
-router.put('/:id', verifyToken, async (req, res) => {
+// Update a comment (requires comment permission)
+router.put('/:id', verifyToken, canComment, async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
