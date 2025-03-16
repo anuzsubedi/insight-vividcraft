@@ -9,7 +9,8 @@ import categoriesRoutes from "./routes/categories.js";
 import feedRoutes from "./routes/feed.js";
 import commentsRouter from "./routes/comments.js";
 import searchRoutes from "./routes/search.js";
-import reportsRoutes from "./routes/reports.js"; // Add this import
+import reportsRoutes from "./routes/reports.js";
+import adminRoutes from "./routes/admin.js";
 
 // Load environment variables
 dotenv.config();
@@ -36,7 +37,8 @@ app.use("/api/categories", categoriesRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/comments", commentsRouter);
 app.use("/api/search", searchRoutes);
-app.use("/api/reports", reportsRoutes); // Add this route
+app.use("/api/reports", reportsRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({
