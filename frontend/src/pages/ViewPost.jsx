@@ -22,6 +22,7 @@ import { postService } from "../services/postService";
 import Comments from '../components/Comments';
 import useAuthState from '../hooks/useAuthState';
 import { formatDistanceToNow } from 'date-fns';
+import { searchService } from "../services/searchService"; // Add this import
 
 // Helper function to get net score
 const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
@@ -35,6 +36,7 @@ function ViewPost() {
   const { user } = useAuthState();
   const toast = useToast();
   const [isReactionAnimating, setIsReactionAnimating] = useState(false);
+  const [processedText, setProcessedText] = useState([]);
 
   useEffect(() => {
     const loadPost = async () => {
@@ -142,6 +144,62 @@ function ViewPost() {
     }
   };
 
+  // Add this new function to process mentions
+  const processMentions = async (text) => {
+    const segments = [];
+    let lastIndex = 0;
+    const mentionRegex = /@(\w+)/g;
+    let match;
+
+    while ((match = mentionRegex.exec(text)) !== null) {
+      // Add text before the mention
+      if (match.index > lastIndex) {
+        segments.push({
+          type: 'text',
+          content: text.slice(lastIndex, match.index)
+        });
+      }
+
+      // Process the mention
+      const username = match[1];
+      try {
+        const response = await searchService.searchUsers(username);
+        const userExists = response.users.some(user => user.username === username);
+        
+        segments.push({
+          type: 'mention',
+          content: username,
+          isValid: userExists
+        });
+      } catch (error) {
+        segments.push({
+          type: 'mention',
+          content: username,
+          isValid: false
+        });
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      segments.push({
+        type: 'text',
+        content: text.slice(lastIndex)
+      });
+    }
+
+    return segments;
+  };
+
+  // Add this effect to process mentions when post loads
+  useEffect(() => {
+    if (post?.body) {
+      processMentions(post.body).then(setProcessedText);
+    }
+  }, [post?.body]);
+
   if (isLoading) {
     return (
       <Container maxW="container.md" py={8}>
@@ -203,7 +261,23 @@ function ViewPost() {
             whiteSpace="pre-wrap"
             mb={6}
           >
-            {post.body}
+            {processedText.map((segment, index) => (
+              segment.type === 'mention' && segment.isValid ? (
+                <Link
+                  key={index}
+                  to={`/user/${segment.content}`}
+                  color="blue.500"
+                  fontWeight="medium"
+                  _hover={{ textDecoration: 'underline' }}
+                >
+                  @{segment.content}
+                </Link>
+              ) : (
+                <Text as="span" key={index}>
+                  {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+                </Text>
+              )
+            ))}
           </Text>
 
           {/* Tags and metadata */}

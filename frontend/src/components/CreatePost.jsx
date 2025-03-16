@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { motion } from "framer-motion";
 import {
@@ -29,6 +29,8 @@ import {
 import { FiClock, FiChevronDown } from 'react-icons/fi';
 import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
+import { mentionService } from '../services/mentionService';
+import MentionDropdown from './MentionDropdown';
 
 const MotionBox = motion(Box);
 
@@ -39,6 +41,9 @@ function CreatePost({ onPostCreated }) {
     const [isScheduling, setIsScheduling] = useState(false);
     const [isCreatingPost, setIsCreatingPost] = useState(false);
     const toast = useToast();
+    const [mentionUsers, setMentionUsers] = useState([]);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const textareaRef = useRef(null);
 
     const [newPost, setNewPost] = useState({
         title: '',
@@ -207,6 +212,31 @@ function CreatePost({ onPostCreated }) {
         handlePostSubmit('scheduled');
     };
 
+    const handleInput = async (e) => {
+        const text = e.target.value;
+        setNewPost(prev => ({ ...prev, body: text }));
+
+        // Handle mention detection
+        const lastAtIndex = text.lastIndexOf('@');
+        if (lastAtIndex >= 0 && text.slice(lastAtIndex + 1).indexOf(' ') === -1) {
+            const query = text.slice(lastAtIndex + 1);
+            setMentionQuery(query);
+            const users = await mentionService.searchUsers(query);
+            setMentionUsers(users);
+        } else {
+            setMentionUsers([]);
+        }
+    };
+
+    const handleMentionSelect = (user) => {
+        const text = newPost.body;
+        const lastAtIndex = text.lastIndexOf('@');
+        const newText = text.slice(0, lastAtIndex) + `@${user.username} `;
+        setNewPost(prev => ({ ...prev, body: newText }));
+        setMentionUsers([]);
+        textareaRef.current?.focus();
+    };
+
     return (
         <MotionBox
             initial={{ y: 20, opacity: 0 }}
@@ -297,24 +327,37 @@ function CreatePost({ onPostCreated }) {
                     </FormControl>
                 )}
                 
-                <Textarea
-                    value={newPost.body}
-                    onChange={(e) => setNewPost(prev => ({ ...prev, body: e.target.value }))}
-                    placeholder="What's on your mind?"
-                    minH="120px"
-                    mb={4}
-                    border="2px solid black"
-                    borderRadius="0"
-                    _hover={{
-                        transform: "translate(-2px, -2px)",
-                        boxShadow: "4px 4px 0 0 #000",
-                    }}
-                    _focus={{
-                        transform: "translate(-2px, -2px)",
-                        boxShadow: "4px 4px 0 0 #000",
-                        borderColor: "black",
-                    }}
-                />
+                <Box position="relative"> {/* Add this wrapper */}
+                    <Textarea
+                        ref={textareaRef}
+                        value={newPost.body}
+                        onChange={handleInput}
+                        placeholder="What's on your mind?"
+                        minH="120px"
+                        mb={4}
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            transform: "translate(-2px, -2px)",
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                        _focus={{
+                            transform: "translate(-2px, -2px)",
+                            boxShadow: "4px 4px 0 0 #000",
+                            borderColor: "black",
+                        }}
+                    />
+                    {mentionUsers.length > 0 && (
+                        <MentionDropdown 
+                            users={mentionUsers}
+                            onSelect={handleMentionSelect}
+                            position={{ 
+                                top: "100%",
+                                left: "0"
+                            }}
+                        />
+                    )}
+                </Box>
 
                 {isArticle && (
                     <FormControl mb={4}>

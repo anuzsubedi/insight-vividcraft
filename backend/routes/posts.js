@@ -272,18 +272,64 @@ router.delete("/:id", verifyToken, async (req, res) => {
             return res.status(404).json({ error: "Post not found" });
         }
 
+        // Delete associated reactions first
+        const { error: reactionsError } = await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', post.id);
+
+        if (reactionsError) {
+            console.error('Error deleting post reactions:', reactionsError);
+            return res.status(500).json({ error: "Failed to delete post reactions" });
+        }
+
+        // Delete associated comments and their reactions
+        const { data: comments, error: commentsError } = await supabase
+            .from('comments')
+            .select('id')
+            .eq('post_id', post.id);
+
+        if (!commentsError && comments?.length > 0) {
+            const commentIds = comments.map(c => c.id);
+
+            // Delete comment reactions
+            const { error: commentReactionsError } = await supabase
+                .from('comment_reactions')
+                .delete()
+                .in('comment_id', commentIds);
+
+            if (commentReactionsError) {
+                console.error('Error deleting comment reactions:', commentReactionsError);
+                return res.status(500).json({ error: "Failed to delete comment reactions" });
+            }
+
+            // Delete comments
+            const { error: deleteCommentsError } = await supabase
+                .from('comments')
+                .delete()
+                .eq('post_id', post.id);
+
+            if (deleteCommentsError) {
+                console.error('Error deleting comments:', deleteCommentsError);
+                return res.status(500).json({ error: "Failed to delete comments" });
+            }
+        }
+
+        // Finally delete the post
         const { error: deleteError } = await supabase
             .from('posts')
             .delete()
             .eq('id', post.id);
 
         if (deleteError) {
+            console.error('Error deleting post:', deleteError);
             return res.status(500).json({ error: "Failed to delete post" });
         }
 
         return res.status(200).json({ message: "Post deleted successfully" });
     } catch (error) {
-        return res.status(500).json({ error: "Failed to delete post" });
+        console.error('Delete post error:', error);
+        return res.status(500).json({ error: "Failed to delete post", details: error.message });
     }
 });
 
