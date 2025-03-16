@@ -162,10 +162,18 @@ BEGIN
 
         -- Handle content deletion/removal
         IF p_action = 'delete_post' AND v_target_type = 'post' THEN
-            -- Only mark the post as deleted, leave comments untouched
-            UPDATE posts
-            SET deleted_at = now()
-            WHERE id::text = v_target_id;
+            -- First delete associated reactions
+            DELETE FROM post_reactions WHERE post_id::text = v_target_id;
+            
+            -- Delete associated comment reactions and comments
+            DELETE FROM comment_reactions
+            WHERE comment_id IN (
+                SELECT id FROM comments WHERE post_id::text = v_target_id
+            );
+            DELETE FROM comments WHERE post_id::text = v_target_id;
+            
+            -- Finally delete the post
+            DELETE FROM posts WHERE id::text = v_target_id;
 
             -- Log the moderation action
             INSERT INTO content_moderation (

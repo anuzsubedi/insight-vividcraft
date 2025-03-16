@@ -265,15 +265,98 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
         const { action, details } = req.body;
         const adminId = req.user.userId;
 
-        // Start a transaction
-        const { error } = await supabase.rpc("handle_report", {
-            p_report_id: reportId,
-            p_admin_id: adminId,
-            p_action: action,
-            p_details: details
-        });
+        // Get report details
+        const { data: report, error: reportError } = await supabase
+            .from('reports')
+            .select('target_id, target_type, user_id')
+            .eq('id', reportId)
+            .single();
 
-        if (error) throw error;
+        if (reportError || !report) {
+            throw new Error('Report not found');
+        }
+
+        // Start transaction by updating report status
+        const { error: statusError } = await supabase
+            .from('reports')
+            .update({
+                status: 'reviewed',
+                reviewed_by: adminId,
+                reviewed_at: new Date().toISOString()
+            })
+            .eq('id', reportId);
+
+        if (statusError) throw statusError;
+
+        // Create action record
+        const { error: actionError } = await supabase
+            .from('report_actions')
+            .insert({
+                report_id: reportId,
+                admin_id: adminId,
+                action_type: action,
+                details,
+                expires_at: details.expiresAt
+            });
+
+        if (actionError) throw actionError;
+
+        // Handle content deletion/removal
+        if (action === 'delete_post' && report.target_type === 'post') {
+            // First delete associated reactions
+            await supabase
+                .from('post_reactions')
+                .delete()
+                .eq('post_id', report.target_id);
+            
+            // Get all comments for this post
+            const { data: comments } = await supabase
+                .from('comments')
+                .select('id')
+                .eq('post_id', report.target_id);
+
+            if (comments?.length > 0) {
+                const commentIds = comments.map(c => c.id);
+                
+                // Delete comment reactions
+                await supabase
+                    .from('comment_reactions')
+                    .delete()
+                    .in('comment_id', commentIds);
+
+                // Delete comments
+                await supabase
+                    .from('comments')
+                    .delete()
+                    .eq('post_id', report.target_id);
+            }
+
+            // Finally delete the post
+            await supabase
+                .from('posts')
+                .delete()
+                .eq('id', report.target_id);
+
+            // Log the moderation action
+            await supabase
+                .from('content_moderation')
+                .insert({
+                    target_id: report.target_id,
+                    target_type: 'post',
+                    action_type: 'delete',
+                    admin_id: adminId,
+                    report_id: reportId,
+                    details: {
+                        reason: details.reason,
+                        category: (await supabase
+                            .from('reports')
+                            .select('category')
+                            .eq('id', reportId)
+                            .single()).data?.category
+                    }
+                });
+        }
+        // ... rest of the existing code for other actions ...
 
         res.json({ message: "Report reviewed successfully" });
     } catch (error) {
