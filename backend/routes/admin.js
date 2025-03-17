@@ -268,7 +268,7 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
         // Get report details
         const { data: report, error: reportError } = await supabase
             .from('reports')
-            .select('target_id, target_type, user_id')
+            .select('target_id, target_type, user_id, reported_user_id')
             .eq('id', reportId)
             .single();
 
@@ -300,6 +300,22 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
             });
 
         if (actionError) throw actionError;
+
+        // If action involves user restrictions, apply them to the reported user
+        if (action.includes('ban') || action.includes('restrict')) {
+            const { error: restrictionError } = await supabase
+                .from("user_restrictions")
+                .insert({
+                    user_id: report.reported_user_id, // Use reported_user_id instead of user_id
+                    restriction_type: action,
+                    expires_at: details.expiresAt,
+                    created_by: adminId,
+                    reason: details.reason,
+                    report_id: reportId
+                });
+
+            if (restrictionError) throw restrictionError;
+        }
 
         // Handle content deletion/removal
         if (action === 'delete_post' && report.target_type === 'post') {
