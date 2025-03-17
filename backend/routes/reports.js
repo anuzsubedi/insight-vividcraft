@@ -15,9 +15,11 @@ const MAX_REPORTS_PER_HOUR = 10;
 // Helper to check if a target exists
 async function validateTarget(targetId, targetType) {
     const table = targetType === 'post' ? 'posts' : 'comments';
+    const userColumn = targetType === 'post' ? 'author_id' : 'user_id';
+    
     const { data, error } = await supabase
         .from(table)
-        .select('id, deleted_at')
+        .select(`id, deleted_at, ${userColumn}`)
         .eq('id', targetId)
         .single();
 
@@ -29,7 +31,10 @@ async function validateTarget(targetId, targetType) {
         return { valid: false, reason: 'Content has already been deleted' };
     }
 
-    return { valid: true };
+    return { 
+        valid: true, 
+        reportedUserId: data[userColumn]
+    };
 }
 
 // Helper to check rate limits
@@ -119,7 +124,7 @@ router.post('/', verifyToken, async (req, res) => {
         }
 
         // Validate target exists and is not deleted
-        const { valid, reason: invalidReason } = await validateTarget(targetId, targetType);
+        const { valid, reason: invalidReason, reportedUserId } = await validateTarget(targetId, targetType);
         if (!valid) {
             return res.status(400).json({
                 error: 'Invalid target',
@@ -136,6 +141,7 @@ router.post('/', verifyToken, async (req, res) => {
                 user_id: userId,
                 category,
                 reason: reason || '',
+                reported_user_id: reportedUserId // Add this line
             }])
             .select()
             .single();

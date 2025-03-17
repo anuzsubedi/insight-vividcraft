@@ -11,6 +11,9 @@ import commentsRouter from "./routes/comments.js";
 import searchRoutes from "./routes/search.js";
 import reportsRoutes from "./routes/reports.js";
 import adminRoutes from "./routes/admin.js";
+import mentionsRoutes from "./routes/mentions.js";
+import permissionsRoutes from "./routes/permissions.js";
+import usersRoutes from "./routes/users.js";
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +42,9 @@ app.use("/api/comments", commentsRouter);
 app.use("/api/search", searchRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/mentions", mentionsRoutes);
+app.use("/api/permissions", permissionsRoutes);
+app.use("/api/users", usersRoutes);
 
 app.get("/", (_req, res) => {
     res.status(200).json({
