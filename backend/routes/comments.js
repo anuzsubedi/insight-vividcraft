@@ -2,6 +2,7 @@ import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
 import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
 import { canComment } from '../middleware/permissions.js';
+import { createCommentNotification, createReplyNotification, createMentionNotification } from '../utils/notificationHelpers.js';
 
 const router = express.Router();
 
@@ -170,29 +171,41 @@ router.post('/', verifyToken, canComment, async (req, res) => {
     }
 
     // If parentId is provided, verify it exists and belongs to the same post
+    let parentComment;
     if (parentId) {
-      const { data: parentComment, error: parentError } = await supabase
+      const { data: parent, error: parentError } = await supabase
         .from('comments')
-        .select('id')
+        .select('id, user_id, post_id')
         .eq('id', parentId)
         .eq('post_id', postId)
         .single();
 
-      if (parentError || !parentComment) {
+      if (parentError || !parent) {
         return res.status(404).json({ error: "Parent comment not found" });
       }
+      parentComment = parent;
     }
 
+    // Get the post owner's ID
+    const { data: post, error: postError } = await supabase
+      .from('posts')
+      .select('author_id')
+      .eq('id', postId)
+      .single();
+
+    if (postError || !post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Create the comment
     const { data, error } = await supabase
       .from('comments')
-      .insert([
-        {
-          content,
-          post_id: postId,
-          user_id: userId,
-          parent_id: parentId
-        }
-      ])
+      .insert([{
+        content,
+        post_id: postId,
+        user_id: userId,
+        parent_id: parentId
+      }])
       .select(`
         *,
         profiles:users(id, username, display_name, avatar_name)
@@ -201,7 +214,7 @@ router.post('/', verifyToken, canComment, async (req, res) => {
 
     if (error) throw error;
 
-    // Add initial reaction state using the same function as other endpoints for consistency
+    // Add initial reaction state
     const reactions = await getCommentReactionsWithUser(data.id, userId);
     const comment = {
       ...data,
@@ -211,6 +224,41 @@ router.post('/', verifyToken, canComment, async (req, res) => {
       },
       userReaction: reactions.userReaction
     };
+
+    // Create notifications
+    try {
+        if (parentId) {
+            // This is a reply, notify the parent comment owner
+            if (parentComment.user_id !== userId) { // Don't notify if replying to own comment
+                await createReplyNotification(parentComment.user_id, comment.id, userId);
+            }
+        } else {
+            // This is a top-level comment, notify the post owner
+            if (post.author_id !== userId) { // Don't notify if commenting on own post
+                await createCommentNotification(post.author_id, postId, userId);
+            }
+        }
+
+        // Check for mentions and create notifications for them
+        const mentionRegex = /@(\w+)/g;
+        let match;
+        while ((match = mentionRegex.exec(content)) !== null) {
+            const username = match[1];
+            // Get the mentioned user's ID
+            const { data: mentionedUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', username)
+                .single();
+
+            if (mentionedUser && mentionedUser.id !== userId) { // Don't notify if mentioning self
+                await createMentionNotification(mentionedUser.id, 'comment', comment.id, userId);
+            }
+        }
+    } catch (notificationError) {
+        console.error('Error creating notifications:', notificationError);
+        // Don't fail the comment creation if notification fails
+    }
     
     res.json(comment);
   } catch (error) {
@@ -261,6 +309,23 @@ router.put('/:id', verifyToken, canComment, async (req, res) => {
       userReaction: reactions.userReaction
     };
 
+    // Check for new mentions and create notifications
+    const mentionRegex = /@(\w+)/g;
+    let match;
+    while ((match = mentionRegex.exec(content)) !== null) {
+        const username = match[1];
+        // Get the mentioned user's ID
+        const { data: mentionedUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+
+        if (mentionedUser && mentionedUser.id !== userId) { // Don't notify if mentioning self
+            await createMentionNotification(mentionedUser.id, 'comment', comment.id, userId);
+        }
+    }
+
     res.json(commentWithReactions);
   } catch (error) {
     console.error('Error updating comment:', error);
@@ -268,36 +333,26 @@ router.put('/:id', verifyToken, canComment, async (req, res) => {
   }
 });
 
-// Delete a comment (user soft delete)
+// Delete a comment
 router.delete('/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.userId;
 
-        // Check if comment exists and belongs to user
-        const { data: comment, error: getError } = await supabase
+        // Verify the comment exists and belongs to the user
+        const { data: comment, error: commentError } = await supabase
             .from('comments')
-            .select('*')
+            .select()
             .eq('id', id)
+            .eq('user_id', userId)
             .single();
 
-        if (getError || !comment) {
-            return res.status(404).json({ error: 'Comment not found' });
+        if (commentError || !comment) {
+            return res.status(404).json({ error: "Comment not found or unauthorized" });
         }
 
-        if (comment.user_id !== userId) {
-            return res.status(403).json({ error: 'Not authorized to delete this comment' });
-        }
-
-        // Soft delete only this comment
-        const { error: updateError } = await supabase
-            .from('comments')
-            .update({ deleted_at: new Date().toISOString() })
-            .eq('id', id);
-
-        if (updateError) {
-            throw updateError;
-        }
+        // Mark this comment and all its replies as deleted
+        await markCommentsAsDeleted(id, supabase);
 
         return res.status(200).json({ message: 'Comment deleted successfully' });
     } catch (error) {
@@ -409,6 +464,25 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
             
             // Get updated reactions
             const reactions = await getCommentReactionsWithUser(id, userId);
+
+            // Check if we need to create a milestone notification
+            if (type === 'upvote' && reactions.upvotes % 10 === 0) {
+                // Get comment owner
+                const { data: comment } = await supabase
+                    .from('comments')
+                    .select('user_id')
+                    .eq('id', id)
+                    .single();
+
+                if (comment && comment.user_id !== userId) {
+                    try {
+                        await createVoteMilestoneNotification(comment.user_id, 'comment', id, reactions.upvotes);
+                    } catch (notificationError) {
+                        console.error('Error creating vote milestone notification:', notificationError);
+                    }
+                }
+            }
+
             return res.json({ 
                 message: 'Reaction added',
                 upvotes: reactions.upvotes,

@@ -3,6 +3,7 @@ import { supabase } from "../config/supabaseClient.js";
 import { verifyToken, optionalAuth } from "../middleware/authMiddleware.js";
 import { addReactionsToPosts } from "../utils/reactionHelpers.js";
 import { canPost } from "../middleware/permissions.js";
+import { createVoteMilestoneNotification, createMentionNotification } from '../utils/notificationHelpers.js';
 
 const router = express.Router();
 
@@ -90,6 +91,27 @@ router.post("/", verifyToken, canPost, async (req, res) => {
                 error: "Failed to create post",
                 details: "No post data returned from database" 
             });
+        }
+
+        // Check for mentions and create notifications
+        const mentionRegex = /@(\w+)/g;
+        let match;
+        while ((match = mentionRegex.exec(body)) !== null) {
+            const username = match[1];
+            // Get the mentioned user's ID
+            const { data: mentionedUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', username)
+                .single();
+
+            if (mentionedUser && mentionedUser.id !== authorId) { // Don't notify if mentioning self
+                try {
+                    await createMentionNotification(mentionedUser.id, 'post', post.id, authorId);
+                } catch (notificationError) {
+                    console.error('Error creating mention notification:', notificationError);
+                }
+            }
         }
 
         return res.status(201).json({
@@ -763,6 +785,25 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
                 
                 // Get updated reactions with user reaction
                 const reactions = await getPostReactionsWithUser(id, userId);
+
+                // Check if updating to upvote creates a milestone
+                if (type === 'upvote' && reactions.upvotes % 10 === 0) {
+                    // Get post owner
+                    const { data: post } = await supabase
+                        .from('posts')
+                        .select('author_id')
+                        .eq('id', id)
+                        .single();
+
+                    if (post && post.author_id !== userId) {
+                        try {
+                            await createVoteMilestoneNotification(post.author_id, 'post', id, reactions.upvotes);
+                        } catch (notificationError) {
+                            console.error('Error creating vote milestone notification:', notificationError);
+                        }
+                    }
+                }
+
                 return res.json({ 
                     message: 'Reaction updated',
                     ...reactions
@@ -782,6 +823,25 @@ router.post('/:id/reactions', verifyToken, async (req, res) => {
             
             // Get updated reactions with user reaction
             const reactions = await getPostReactionsWithUser(id, userId);
+
+            // Check if we need to create a milestone notification
+            if (type === 'upvote' && reactions.upvotes % 10 === 0) {
+                // Get post owner
+                const { data: post } = await supabase
+                    .from('posts')
+                    .select('author_id')
+                    .eq('id', id)
+                    .single();
+
+                if (post && post.author_id !== userId) {
+                    try {
+                        await createVoteMilestoneNotification(post.author_id, 'post', id, reactions.upvotes);
+                    } catch (notificationError) {
+                        console.error('Error creating vote milestone notification:', notificationError);
+                    }
+                }
+            }
+
             return res.json({ 
                 message: 'Reaction added',
                 ...reactions

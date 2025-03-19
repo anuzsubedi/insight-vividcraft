@@ -12,6 +12,7 @@ import searchRoutes from "./routes/search.js";
 import reportsRoutes from "./routes/reports.js";
 import adminRoutes from "./routes/admin.js";
 import mentionsRoutes from "./routes/mentions.js";
+import notificationsRoutes from "./routes/notifications.js";
 import permissionsRoutes from "./routes/permissions.js";
 import usersRoutes from "./routes/users.js";
 
@@ -43,6 +44,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/mentions", mentionsRoutes);
+app.use("/api/notifications", notificationsRoutes);
 app.use("/api/permissions", permissionsRoutes);
 app.use("/api/users", usersRoutes);
 
