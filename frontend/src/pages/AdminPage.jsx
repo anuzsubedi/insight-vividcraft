@@ -176,7 +176,7 @@ const AdminPage = () => {
       });
 
       if (action.restrictUser) {
-        await adminService.restrictUser(selectedReport.user_id, {
+        await adminService.restrictUser(selectedReport.reported_user_id, {
           type: action.restrictUser.type,
           expiresAt: action.restrictUser.expiresAt,
           reason: action.restrictUser.reason,

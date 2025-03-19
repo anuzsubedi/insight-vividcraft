@@ -94,7 +94,8 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
         title: 'Error creating reply',
         description: error.message,
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       });
     }
   };
