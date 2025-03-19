@@ -15,6 +15,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Logo from "./Logo";
 import SearchDropdown from "./SearchDropdown";
+import NotificationBell from "./NotificationBell";
 import PropTypes from 'prop-types';
 
 const MotionBox = motion(Box);
@@ -51,6 +52,7 @@ const Header = ({ user, isAdmin }) => {
 
           <HStack spacing={6}>
             <SearchDropdown />
+            <NotificationBell />
             <Menu>
               <MenuButton
                 as={Button}

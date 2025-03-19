@@ -84,5 +84,11 @@ export const ENDPOINTS = {
         GET_USER_RESTRICTIONS: (userId) => `/admin/users/${userId}/restrictions`,
         GET_ACTIONS: '/admin/actions',
         GET_MODERATION_HISTORY: '/admin/moderation/history'
+    },
+    NOTIFICATIONS: {
+        LIST: '/notifications',
+        MARK_VIEWED: '/notifications/viewed',
+        MARK_OPENED: '/notifications/opened',
+        UNREAD_COUNT: '/notifications/unread-count'
     }
 };

@@ -133,6 +133,7 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [feedType, selectedCategories, sortType, sortPeriod, toast]);
 
     // Reset feed when type or sort changes
