@@ -319,38 +319,12 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
 
         // Handle content deletion/removal
         if (action === 'delete_post' && report.target_type === 'post') {
-            // First delete associated reactions
-            await supabase
-                .from('post_reactions')
-                .delete()
-                .eq('post_id', report.target_id);
-            
-            // Get all comments for this post
-            const { data: comments } = await supabase
-                .from('comments')
-                .select('id')
-                .eq('post_id', report.target_id);
-
-            if (comments?.length > 0) {
-                const commentIds = comments.map(c => c.id);
-                
-                // Delete comment reactions
-                await supabase
-                    .from('comment_reactions')
-                    .delete()
-                    .in('comment_id', commentIds);
-
-                // Delete comments
-                await supabase
-                    .from('comments')
-                    .delete()
-                    .eq('post_id', report.target_id);
-            }
-
-            // Finally delete the post
+            // Set removed_at timestamp for the post
             await supabase
                 .from('posts')
-                .delete()
+                .update({ 
+                    removed_at: new Date().toISOString() 
+                })
                 .eq('id', report.target_id);
 
             // Log the moderation action
@@ -371,8 +345,34 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
                             .single()).data?.category
                     }
                 });
+        } else if (action === 'delete_comment' && report.target_type === 'comment') {
+            // Soft delete the comment by setting removed_at timestamp
+            await supabase
+                .from('comments')
+                .update({ 
+                    removed_at: new Date().toISOString() 
+                })
+                .eq('id', report.target_id);
+
+            // Log the moderation action
+            await supabase
+                .from('content_moderation')
+                .insert({
+                    target_id: report.target_id,
+                    target_type: 'comment',
+                    action_type: 'delete',
+                    admin_id: adminId,
+                    report_id: reportId,
+                    details: {
+                        reason: details.reason,
+                        category: (await supabase
+                            .from('reports')
+                            .select('category')
+                            .eq('id', reportId)
+                            .single()).data?.category
+                    }
+                });
         }
-        // ... rest of the existing code for other actions ...
 
         res.json({ message: "Report reviewed successfully" });
     } catch (error) {

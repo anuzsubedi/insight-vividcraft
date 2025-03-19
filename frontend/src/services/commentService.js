@@ -33,7 +33,18 @@ const createComment = async (content, postId, parentId = null) => {
       response: error.response?.data,
       status: error.response?.status
     });
-    throw error;
+    
+    // Handle ban error message
+    if (error.response?.status === 403) {
+      const expiresAt = error.response.data?.expiresAt;
+      if (expiresAt) {
+        const expiryDate = new Date(expiresAt).toLocaleDateString();
+        throw new Error(`You are banned from commenting until ${expiryDate}`);
+      } else {
+        throw new Error('You are permanently banned from commenting');
+      }
+    }
+    throw new Error(error.response?.data?.error || 'Failed to create comment');
   }
 };
 
