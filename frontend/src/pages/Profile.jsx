@@ -113,31 +113,15 @@ function Profile() {
         }
         return;
       }
-      
-      // Log the actual server response to debug user reactions
-      console.log("Server response for posts:", response.posts.map(p => ({
-        id: p.id,
-        userReaction: p.userReaction,
-        upvotes: p.reactions?.upvotes,
-        downvotes: p.reactions?.downvotes
-      })));
-      
-      // Directly use the server response without fetching reactions again
-      // This ensures we use the userReaction value directly from the backend
-      const postsWithReactions = response.posts.map(post => ({
-        ...post,
-        reactions: post.reactions || { upvotes: 0, downvotes: 0 },
-        userReaction: post.userReaction || null
-      }));
-      
+
       // Update pagination state
       const { pagination } = response;
       setHasMore(pagination.hasMore);
       setTotalPosts(pagination.total);
       
-      // Update posts list with reactions included
+      // Update posts list
       setPosts(prevPosts => 
-        page === 1 ? postsWithReactions : [...prevPosts, ...postsWithReactions]
+        page === 1 ? response.posts : [...prevPosts, ...response.posts]
       );
       
     } catch (error) {
@@ -451,7 +435,7 @@ function Profile() {
       updatedPost.reactions[`${type}s`] -= 1;
       updatedPost.userReaction = null;
     } else {
-      // If there was a previous reaction, remove it first
+      // If there was a previous reaction, remove it
       if (post.userReaction) {
         updatedPost.reactions[`${post.userReaction}s`] -= 1;
       }
@@ -460,7 +444,6 @@ function Profile() {
       updatedPost.userReaction = type;
     }
 
-    // Update posts state with optimistic change
     setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
 
     try {
