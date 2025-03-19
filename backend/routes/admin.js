@@ -306,7 +306,7 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
             const { error: restrictionError } = await supabase
                 .from("user_restrictions")
                 .insert({
-                    user_id: report.reported_user_id, // Use reported_user_id instead of user_id
+                    user_id: report.reported_user_id, // Using reported_user_id for restrictions
                     restriction_type: action,
                     expires_at: details.expiresAt,
                     created_by: adminId,
