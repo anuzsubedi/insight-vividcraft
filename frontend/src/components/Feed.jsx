@@ -43,6 +43,7 @@ function Feed() {
     const [isLoading, setIsLoading] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [totalPosts, setTotalPosts] = useState(0);
     const [categories, setCategories] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [feedType, setFeedType] = useState('following');
@@ -72,8 +73,8 @@ function Feed() {
     // Load posts
     const loadPosts = useCallback(async () => {
         if (isLoading || !hasMore) return;
-
         setIsLoading(true);
+        
         try {
             let response;
             const params = {
@@ -98,33 +99,21 @@ function Feed() {
                     throw new Error('Invalid feed type');
             }
 
-            // Add reactions to each post
-            const postsWithReactions = await Promise.all(response.posts.map(async (post) => {
-                if (post.reactions && post.userReaction !== undefined) {
-                    // If reactions are already included in the response, use them
-                    return post;
-                }
-                try {
-                    const reactions = await postService.getReactions(post.id);
-                    return {
-                        ...post,
-                        reactions: {
-                            upvotes: reactions.upvotes || 0,
-                            downvotes: reactions.downvotes || 0,
-                        },
-                        userReaction: reactions.userReaction
-                    };
-                } catch (error) {
-                    console.error('Error loading reactions for post:', post.id, error);
-                    return {
-                        ...post,
-                        reactions: { upvotes: 0, downvotes: 0 },
-                        userReaction: null
-                    };
-                }
-            }));
+            // Update total posts count
+            setTotalPosts(response.pagination.total);
+            
+            // Update posts list
+            if (page === 1) {
+                setPosts(response.posts);
+            } else {
+                setPosts(prevPosts => {
+                    // Get unique posts by filtering out duplicates
+                    const existingIds = new Set(prevPosts.map(post => post.id));
+                    const newPosts = response.posts.filter(post => !existingIds.has(post.id));
+                    return [...prevPosts, ...newPosts];
+                });
+            }
 
-            setPosts(prev => page === 1 ? postsWithReactions : [...prev, ...postsWithReactions]);
             setHasMore(response.pagination.hasMore);
         } catch (error) {
             console.error('Feed error:', error);
@@ -146,6 +135,7 @@ function Feed() {
         setPosts([]);
         setPage(1);
         setHasMore(true);
+        setTotalPosts(0);
     }, [feedType, selectedCategories, sortType, sortPeriod]);
 
     // Load more posts when scrolling to bottom
@@ -260,97 +250,112 @@ function Feed() {
             <CreatePost categories={categories} onPostCreated={handlePostCreated} />
 
             {/* Feed Controls */}
-            <HStack spacing={4} wrap="wrap">
-                <ChakraSelect
-                    value={feedType}
-                    onChange={(e) => handleFeedTypeChange(e.target.value)}
-                    w="200px"
-                    border="2px solid black"
-                    borderRadius="0"
-                    _hover={{
-                        boxShadow: "4px 4px 0 0 #000",
-                    }}
-                >
-                    <option value="following">Following</option>
-                    <option value="network">Network</option>
-                    <option value="explore">Explore</option>
-                </ChakraSelect>
-
-                {feedType !== 'explore' && (
+            <Box>
+                <HStack spacing={4} wrap="wrap" mb={4}>
                     <ChakraSelect
-                        value={sortType}
-                        onChange={(e) => setSortType(e.target.value)}
-                        w="150px"
+                        value={feedType}
+                        onChange={(e) => handleFeedTypeChange(e.target.value)}
+                        w="200px"
                         border="2px solid black"
                         borderRadius="0"
                         _hover={{
                             boxShadow: "4px 4px 0 0 #000",
                         }}
                     >
-                        <option value="recent">Recent</option>
-                        <option value="top">Top</option>
+                        <option value="following">Following</option>
+                        <option value="network">Network</option>
+                        <option value="explore">Explore</option>
                     </ChakraSelect>
-                )}
 
-                {sortType === 'top' && feedType !== 'explore' && (
-                    <ChakraSelect
-                        value={sortPeriod}
-                        onChange={(e) => setSortPeriod(e.target.value)}
-                        w="150px"
-                        border="2px solid black"
-                        borderRadius="0"
-                        _hover={{
-                            boxShadow: "4px 4px 0 0 #000",
-                        }}
-                    >
-                        <option value="day">Today</option>
-                        <option value="week">This Week</option>
-                        <option value="month">This Month</option>
-                        <option value="year">This Year</option>
-                        <option value="all">All Time</option>
-                    </ChakraSelect>
-                )}
-
-                {feedType === 'explore' && (
-                    <Menu closeOnSelect={false}>
-                        <MenuButton
-                            as={Button}
-                            bg="white"
+                    {feedType !== 'explore' && (
+                        <ChakraSelect
+                            value={sortType}
+                            onChange={(e) => setSortType(e.target.value)}
+                            w="150px"
                             border="2px solid black"
                             borderRadius="0"
                             _hover={{
                                 boxShadow: "4px 4px 0 0 #000",
                             }}
                         >
-                            Categories
-                        </MenuButton>
-                        <MenuList
+                            <option value="recent">Recent</option>
+                            <option value="top">Top</option>
+                        </ChakraSelect>
+                    )}
+
+                    {sortType === 'top' && feedType !== 'explore' && (
+                        <ChakraSelect
+                            value={sortPeriod}
+                            onChange={(e) => setSortPeriod(e.target.value)}
+                            w="150px"
                             border="2px solid black"
                             borderRadius="0"
-                            boxShadow="4px 4px 0 black"
+                            _hover={{
+                                boxShadow: "4px 4px 0 0 #000",
+                            }}
                         >
-                            <MenuOptionGroup
-                                type="checkbox"
-                                value={selectedCategories}
-                                onChange={handleCategoryChange}
+                            <option value="day">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="year">This Year</option>
+                            <option value="all">All Time</option>
+                        </ChakraSelect>
+                    )}
+
+                    {feedType === 'explore' && (
+                        <Menu closeOnSelect={false}>
+                            <MenuButton
+                                as={Button}
+                                bg="white"
+                                border="2px solid black"
+                                borderRadius="0"
+                                _hover={{
+                                    boxShadow: "4px 4px 0 0 #000",
+                                }}
                             >
-                                {categories.map(category => (
-                                    <MenuItemOption
-                                        key={category.id}
-                                        value={category.id}
-                                        _hover={{ bg: "paper.100" }}
-                                    >
-                                        {category.name}
-                                    </MenuItemOption>
-                                ))}
-                            </MenuOptionGroup>
-                        </MenuList>
-                    </Menu>
-                )}
-            </HStack>
+                                Categories
+                            </MenuButton>
+                            <MenuList
+                                border="2px solid black"
+                                borderRadius="0"
+                                boxShadow="4px 4px 0 black"
+                            >
+                                <MenuOptionGroup
+                                    type="checkbox"
+                                    value={selectedCategories}
+                                    onChange={handleCategoryChange}
+                                >
+                                    {categories.map(category => (
+                                        <MenuItemOption
+                                            key={category.id}
+                                            value={category.id}
+                                            _hover={{ bg: "paper.100" }}
+                                        >
+                                            {category.name}
+                                        </MenuItemOption>
+                                    ))}
+                                </MenuOptionGroup>
+                            </MenuList>
+                        </Menu>
+                    )}
+                </HStack>
+
+                {/* Posts count */}
+                <Text color="paper.600" fontSize="md" mb={4}>
+                    {totalPosts === 0 ? 'No posts yet' : `${totalPosts} post${totalPosts === 1 ? '' : 's'}`}
+                </Text>
+            </Box>
 
             {/* Posts */}
             <VStack spacing={6} align="stretch">
+                {/* Initial loading state */}
+                {isLoading && posts.length === 0 && (
+                    <Center py={8}>
+                        <Spinner size="xl" color="accent.500" thickness="4px" />
+                    </Center>
+                )}
+
+                {/* Posts list */}
                 {posts.map((post) => (
                     <Box
                         key={post.id}
@@ -464,12 +469,14 @@ function Feed() {
                     </Box>
                 ))}
 
-                {isLoading && (
+                {/* Loading more indicator */}
+                {isLoading && posts.length > 0 && (
                     <Center py={4}>
-                        <Spinner size="lg" />
+                        <Spinner size="md" color="accent.500" thickness="3px" />
                     </Center>
                 )}
 
+                {/* No posts message */}
                 {!isLoading && posts.length === 0 && (
                     <Box
                         p={6}
@@ -483,6 +490,7 @@ function Feed() {
                     </Box>
                 )}
 
+                {/* Intersection observer target */}
                 {hasMore && !isLoading && <Box ref={ref} h="20px" />}
             </VStack>
 
