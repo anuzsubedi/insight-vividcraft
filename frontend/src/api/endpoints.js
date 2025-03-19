@@ -40,6 +40,7 @@ export const ENDPOINTS = {
         PUBLISH_DUE: '/posts/scheduled/publish-due',
         PUBLISH_SCHEDULED: '/posts/scheduled/publish-due',
         GET: (id) => `/posts/${id}`,
+        ADD_REACTION: (id) => `/posts/${id}/reactions`,
     },
     CATEGORIES: {
         LIST: '/categories',
