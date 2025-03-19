@@ -53,6 +53,9 @@ import { useInView } from 'react-intersection-observer';
 import CreatePost from "../components/CreatePost";
 import Connection from "../components/Connection";
 
+// Helper function to get net score
+const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
+
 function Profile() {
   const { username } = useParams();
   const { user } = useAuthState();
@@ -422,7 +425,6 @@ function Profile() {
     }
   };
 
-  // Add handleReaction function
   const handleReaction = async (postId, type) => {
     if (!user) {
         toast({
