@@ -93,7 +93,12 @@ function NotificationBell() {
             // Mark as opened
             await notificationService.markAsOpened(notification.id);
 
-            // Navigate based on notification type
+            // Navigate based on notification type and use post_id for navigation
+            if (!notification.post_id) {
+                console.error('No post_id found for notification:', notification);
+                return;
+            }
+
             switch (notification.type) {
                 case 'comment':
                     navigate(`/posts/${notification.post_id}#comment-${notification.comment_id}`);

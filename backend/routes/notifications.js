@@ -19,11 +19,12 @@ router.get('/', verifyToken, async (req, res) => {
 
         if (countError) throw countError;
 
-        // Get notifications with related actors
+        // Get notifications with related actors and include post_id
         const { data: notifications, error } = await supabase
             .from('notifications')
             .select(`
                 *,
+                post_id,
                 actors:notification_actors(
                     user:users(
                         username,
