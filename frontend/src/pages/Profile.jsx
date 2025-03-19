@@ -53,6 +53,9 @@ import { useInView } from 'react-intersection-observer';
 import CreatePost from "../components/CreatePost";
 import Connection from "../components/Connection";
 
+// Helper function to get net score
+const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
+
 function Profile() {
   const { username } = useParams();
   const { user } = useAuthState();
@@ -86,60 +89,54 @@ function Profile() {
   
   // Intersection observer for infinite scrolling
   const { ref, inView } = useInView({
-    threshold: 0,
+    threshold: 0.1,
+    rootMargin: '0px 0px 300px 0px' // Load more content earlier
   });
 
-  // Function to load more posts
-  const loadMorePosts = useCallback(async () => {
-    if (!username || !hasMore || isLoadingPosts) return;
+  // Function to load posts with current filters
+  const loadPosts = useCallback(async (pageNum = 1) => {
+    if (!username || isLoadingPosts) return;
     
     try {
       setIsLoadingPosts(true);
+      
       const response = await postService.getUserPosts(username, {
-        page,
+        page: pageNum,
         limit: 10,
         type: postType,
         sortBy: sortOrder,
         period: sortPeriod
       });
       
-      if (!response || !response.posts) {
+      if (!response || !response.posts || response.posts.length === 0) {
         setHasMore(false);
-        if (page === 1) {
+        if (pageNum === 1) {
           setPosts([]);
         }
+        setTotalPosts(response?.pagination?.total || 0);
         return;
       }
-      
-      // Log the actual server response to debug user reactions
-      console.log("Server response for posts:", response.posts.map(p => ({
-        id: p.id,
-        userReaction: p.userReaction,
-        upvotes: p.reactions?.upvotes,
-        downvotes: p.reactions?.downvotes
-      })));
-      
-      // Directly use the server response without fetching reactions again
-      // This ensures we use the userReaction value directly from the backend
-      const postsWithReactions = response.posts.map(post => ({
-        ...post,
-        reactions: post.reactions || { upvotes: 0, downvotes: 0 },
-        userReaction: post.userReaction || null
-      }));
       
       // Update pagination state
       const { pagination } = response;
       setHasMore(pagination.hasMore);
       setTotalPosts(pagination.total);
       
-      // Update posts list with reactions included
-      setPosts(prevPosts => 
-        page === 1 ? postsWithReactions : [...prevPosts, ...postsWithReactions]
-      );
+      // Update posts list
+      if (pageNum === 1) {
+        setPosts(response.posts);
+      } else {
+        setPosts(prevPosts => {
+          // Get unique posts by filtering out duplicates
+          const existingIds = new Set(prevPosts.map(post => post.id));
+          const newPosts = response.posts.filter(post => !existingIds.has(post.id));
+          return [...prevPosts, ...newPosts];
+        });
+      }
       
     } catch (error) {
       console.error("Error loading posts:", error);
-      if (!error.message.includes('timeout')) {
+      if (!error.message?.includes('timeout')) {
         toast({
           title: "Error loading posts",
           description: error.message,
@@ -148,42 +145,37 @@ function Profile() {
         });
       }
       setHasMore(false);
-      if (page === 1) {
-        setPosts([]);
-      }
     } finally {
       setIsLoadingPosts(false);
     }
-  }, [username, page, postType, sortOrder, sortPeriod, hasMore, isLoadingPosts, toast]);
+  }, [username, postType, sortOrder, sortPeriod, toast]);
 
   // Reset and reload posts when filters change
   useEffect(() => {
     if (!username) return;
+    
+    // Reset pagination state
     setPosts([]);
     setPage(1);
     setHasMore(true);
-  }, [username, postType, sortOrder, sortPeriod]);
-
-  // Load posts when page is reset or changed
-  useEffect(() => {
-    if (username && hasMore) {
-      loadMorePosts();
-    }
-  }, [username, page, loadMorePosts, hasMore]);
-
-  // Reset period when changing sort order
-  useEffect(() => {
-    if (sortOrder === 'top') {
-      setSortPeriod('all');
-    }
-  }, [sortOrder]);
+    
+    // Load first page of posts with new filters
+    loadPosts(1);
+  }, [username, postType, sortOrder, sortPeriod, loadPosts]);
 
   // Load more posts when scrolling to bottom
   useEffect(() => {
-    if (inView && !isLoadingPosts && hasMore && posts.length > 0) {
-      setPage(prev => prev + 1);
+    if (inView && !isLoadingPosts && hasMore) {
+      setPage(prevPage => prevPage + 1);
     }
-  }, [inView, isLoadingPosts, hasMore, posts.length]);
+  }, [inView, isLoadingPosts, hasMore]);
+
+  // Load posts when page changes (after the first page)
+  useEffect(() => {
+    if (page > 1) {
+      loadPosts(page);
+    }
+  }, [page, loadPosts]);
 
   // Update filtered posts when posts change
   useEffect(() => {
@@ -392,7 +384,7 @@ function Profile() {
         duration: 3000,
       });
       // Refetch posts to ensure state is in sync
-      loadMorePosts();
+      loadPosts(1);
     } catch (error) {
       toast({
         title: "Error deleting post",
@@ -422,15 +414,16 @@ function Profile() {
     }
   };
 
-  // Add handleReaction function
-  const handleReaction = async (postId, type) => {
+  const handleReaction = async (e, postId, type) => {
+    e.stopPropagation(); // Prevent post click event
+
     if (!user) {
-        toast({
-            title: 'Please login to react',
-            status: 'warning',
-            duration: 3000,
-        });
-        return;
+      toast({
+        title: 'Please login to react',
+        status: 'warning',
+        duration: 3000,
+      });
+      return;
     }
 
     const post = posts.find(p => p.id === postId);
@@ -440,60 +433,50 @@ function Profile() {
     const previousReactions = { ...post.reactions };
     const previousUserReaction = post.userReaction;
 
-    console.log(`Before reaction update - Post ${postId}: userReaction=${post.userReaction}, type=${type}`);
-
-    // Optimistically update UI based on current state
+    // Optimistically update UI
     const updatedPost = { ...post };
     if (post.userReaction === type) {
-        // Removing reaction
-        updatedPost.reactions[`${type}s`] -= 1;
-        updatedPost.userReaction = null;
+      // Removing reaction
+      updatedPost.reactions[`${type}s`] -= 1;
+      updatedPost.userReaction = null;
     } else {
-        // If there was a previous reaction, remove it first
-        if (post.userReaction) {
-            updatedPost.reactions[`${post.userReaction}s`] -= 1;
-        }
-        // Add new reaction
-        updatedPost.reactions[`${type}s`] += 1;
-        updatedPost.userReaction = type;
+      // If there was a previous reaction, remove it
+      if (post.userReaction) {
+        updatedPost.reactions[`${post.userReaction}s`] -= 1;
+      }
+      // Add new reaction
+      updatedPost.reactions[`${type}s`] += 1;
+      updatedPost.userReaction = type;
     }
 
-    // Update posts state with optimistic change
     setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
 
     try {
-        // Make API call
-        const result = await postService.addReaction(postId, type);
-        console.log(`Server response for reaction - Post ${postId}:`, result);
-
-        // Update with server response
-        setPosts(prev => prev.map(p => p.id === postId ? {
-            ...p,
-            reactions: {
-                upvotes: result.upvotes || 0,
-                downvotes: result.downvotes || 0
-            },
-            userReaction: result.userReaction
-        } : p));
+      const result = await postService.addReaction(postId, type);
+      // Use the server response to update the state
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        reactions: {
+          upvotes: result.upvotes || 0,
+          downvotes: result.downvotes || 0
+        },
+        userReaction: result.userReaction
+      } : p));
     } catch (error) {
-        // Revert on error
-        setPosts(prev => prev.map(p => p.id === postId ? {
-            ...p,
-            reactions: previousReactions,
-            userReaction: previousUserReaction
-        } : p));
-        
-        toast({
-            title: 'Error updating reaction',
-            description: error.message,
-            status: 'error',
-            duration: 3000,
-        });
+      // Revert on error
+      setPosts(prev => prev.map(p => p.id === postId ? {
+        ...p,
+        reactions: previousReactions,
+        userReaction: previousUserReaction
+      } : p));
+      toast({
+        title: 'Error updating reaction',
+        description: error.message,
+        status: 'error',
+        duration: '3000',
+      });
     }
   };
-
-  // Add helper function 
-  const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
 
   if (isLoading || !profile) {
     return (
@@ -853,9 +836,10 @@ function Profile() {
                 setPosts([]);
                 setPage(1);
                 setHasMore(true);
+                loadPosts(1);
               }} />
             )}
-
+            
             {/* Filters and Tabs */}
             <Flex direction={{ base: "column", md: "row" }} gap={4} mb={4}>
               <Tabs flex={1} variant="enclosed">
@@ -877,7 +861,6 @@ function Profile() {
                   <option value="recent">Recent</option>
                   <option value="top">Top</option>
                 </Select>
-
                 {sortOrder === 'top' && (
                   <Select
                     value={sortPeriod}
@@ -895,13 +878,21 @@ function Profile() {
                 )}
               </HStack>
             </Flex>
-
+            
             {/* Posts stats */}
             <Text color="paper.600" fontSize="md">
               {totalPosts === 0 ? 'No posts yet' : `${totalPosts} post${totalPosts === 1 ? '' : 's'}`}
             </Text>
-
-            {filteredPosts.map((post) => (
+            
+            {/* Initial loading state */}
+            {isLoadingPosts && posts.length === 0 && (
+              <Center py={8}>
+                <Spinner size="xl" color="accent.500" thickness="4px" />
+              </Center>
+            )}
+            
+            {/* Posts list */}
+            {posts.map((post) => (
               <Box
                 key={post.id}
                 bg="white"
@@ -915,136 +906,125 @@ function Profile() {
                 position="relative"
                 onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
               >
-                <Box p={6}>
-                  {/* Top section with avatar, username, date, and menu */}
-                  <HStack spacing={4} mb={4} position="relative">
-                    <HStack flex={1}>
-                      <Avatar
-                        size="md"
-                        name={profile.displayName}
-                        src={profile.avatarName ? `/avatars/${profile.avatarName}` : undefined}
-                      />
-                      <VStack align="start" spacing={0}>
-                        <HStack spacing={2}>
-                          <Text fontWeight="bold">@{profile.username}</Text>
-                          {post.type === 'article' && post.category && (
-                            <Badge px={3} py={1} colorScheme="teal">
-                              {post.category.name}
-                            </Badge>
-                          )}
-                        </HStack>
-                        <Text fontSize="sm" color="gray.600">
-                          {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
-                        </Text>
-                      </VStack>
-                    </HStack>
-
-                    {/* Move menu to top right and update icon */}
-                    {isOwnProfile && (
-                      <Menu isLazy>
-                        <MenuButton
-                          as={IconButton}
-                          icon={<FiMoreHorizontal />}
-                          variant="ghost"
-                          size="sm"
-                          position="absolute"
-                          top={2}
-                          right={2}
-                          aria-label="Post options"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <Portal>
-                          <MenuList
-                            border="1px solid"
-                            borderColor="gray.200"
-                            onClick={(e) => e.stopPropagation()}
-                            bg="white"
-                            zIndex={1400}
-                          >
-                            <MenuItem 
-                              as={Link}
-                              to={`/posts/${post.id}/edit`}
-                              state={{ from: location.pathname }}
-                              icon={<EditIcon />}
-                            >
-                              Edit
-                            </MenuItem>
-                            <MenuItem 
-                              icon={<ViewOffIcon />} 
-                              onClick={() => handleUnpublishPost(post.id)}
-                            >
-                              Move to Drafts
-                            </MenuItem>
-                            <MenuItem 
-                              icon={<DeleteIcon />} 
-                              color="red.500"
-                              onClick={() => handleDeletePost(post.id)}
-                            >
-                              Delete Post
-                            </MenuItem>
-                          </MenuList>
-                        </Portal>
-                      </Menu>
-                    )}
-
-                    <HStack spacing={2} ml="auto">
-                      {post.type === 'article' && post.category && (
-                        <Badge
-                          px={3}
-                          py={1}
-                          colorScheme="teal"
-                        >
-                          {post.category.name}
-                        </Badge>
-                      )}
-                    </HStack>
-                  </HStack>
-
-                  {/* Post content */}
-                  <Box pl={14}> {/* Align content with username */}
-                    {post.type === 'article' && post.title && (
-                      <Text 
-                        fontWeight="bold"
-                        fontSize="2xl"
-                        mb={3}
-                      >
-                        {post.title}
+                {/* ... post display content remains the same ... */}
+                {/* Top section with avatar, username, date, and menu */}
+                <HStack spacing={4} mb={4} position="relative">
+                  <HStack flex={1}>
+                    <Avatar
+                      size="md"
+                      name={profile.displayName}
+                      src={profile.avatarName ? `/avatars/${profile.avatarName}` : undefined}
+                    />
+                    <VStack align="start" spacing={0}>
+                      <HStack spacing={2}>
+                        <Text fontWeight="bold">@{profile.username}</Text>
+                        {post.type === 'article' && post.category && (
+                          <Badge px={3} py={1} colorScheme="teal">
+                            {post.category.name}
+                          </Badge>
+                        )}
+                      </HStack>
+                      <Text fontSize="sm" color="gray.600">
+                        {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
                       </Text>
+                    </VStack>
+                  </HStack>
+                  {/* Move menu to top right and update icon */}
+                  {isOwnProfile && (
+                    <Menu isLazy>
+                      <MenuButton
+                        as={IconButton}
+                        icon={<FiMoreHorizontal />}
+                        variant="ghost"
+                        size="sm"
+                        position="absolute"
+                        top={2}
+                        right={2}
+                        aria-label="Post options"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Portal>
+                        <MenuList
+                          border="1px solid"
+                          borderColor="gray.200"
+                          onClick={(e) => e.stopPropagation()}
+                          bg="white"
+                          zIndex={1400}
+                        >
+                          <MenuItem 
+                            as={Link}
+                            to={`/posts/${post.id}/edit`}
+                            state={{ from: location.pathname }}
+                            icon={<EditIcon />}
+                          >
+                            Edit
+                          </MenuItem>
+                          <MenuItem 
+                            icon={<ViewOffIcon />} 
+                            onClick={() => handleUnpublishPost(post.id)}
+                          >
+                            Move to Drafts
+                          </MenuItem>
+                          <MenuItem 
+                            icon={<DeleteIcon />} 
+                            color="red.500"
+                            onClick={() => handleDeletePost(post.id)}
+                          >
+                            Delete Post
+                          </MenuItem>
+                        </MenuList>
+                      </Portal>
+                    </Menu>
+                  )}
+                  <HStack spacing={2} ml="auto">
+                    {post.type === 'article' && post.category && (
+                      <Badge
+                        px={3}
+                        py={1}
+                        colorScheme="teal"
+                      >
+                        {post.category.name}
+                      </Badge>
                     )}
+                  </HStack>
+                </HStack>
+                {/* Post content */}
+                <Box pl={14}> {/* Align content with username */}
+                  {post.type === 'article' && post.title && (
                     <Text 
-                      fontSize="lg" 
-                      mb={4}
-                      color="gray.700"
-                      whiteSpace="pre-wrap"
+                      fontWeight="bold"
+                      fontSize="2xl"
+                      mb={3}
                     >
-                      {post.body}
+                      {post.title}
                     </Text>
-                  </Box>
+                  )}
+                  <Text 
+                    fontSize="lg" 
+                    mb={4}
+                    color="gray.700"
+                    whiteSpace="pre-wrap"
+                  >
+                    {post.body}
+                  </Text>
                 </Box>
-                
-                {/* Reactions section */}
+                {/* Post reactions UI */}
                 <HStack spacing={6} px={6} pb={4} onClick={e => e.stopPropagation()}>
                   <HStack spacing={2}>
                     <IconButton
                       icon={post.userReaction === 'upvote' ? <BiSolidUpvote /> : <BiUpvote />}
                       variant="ghost"
                       size="sm"
-                      color={post.userReaction === 'upvote' ? "accent.500" : "gray.600"}
+                      color={post.userReaction === 'upvote' ? "blue.500" : "gray.600"}
                       aria-label="Upvote"
-                      onClick={() => handleReaction(post.id, 'upvote')}
-                      _hover={{ 
-                        color: post.userReaction === 'upvote' ? "accent.600" : "accent.400",
-                        bg: "accent.50" 
-                      }}
+                      onClick={(e) => handleReaction(e, post.id, 'upvote')}
                     />
                     <Text 
-                      fontSize="sm"
-                      fontWeight="medium"
-                      color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "accent.500" : 
-                             getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : 
-                             "gray.600"}
+                      color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "blue.500" : 
+                             getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : "gray.600"}
+                      fontWeight="semibold"
                     >
-                      {post.reactions?.upvotes || 0}
+                      {getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0)}
                     </Text>
                     <IconButton
                       icon={post.userReaction === 'downvote' ? <BiSolidDownvote /> : <BiDownvote />}
@@ -1052,23 +1032,9 @@ function Profile() {
                       size="sm"
                       color={post.userReaction === 'downvote' ? "red.500" : "gray.600"}
                       aria-label="Downvote"
-                      onClick={() => handleReaction(post.id, 'downvote')}
-                      _hover={{ 
-                        color: post.userReaction === 'downvote' ? "red.600" : "red.400",
-                        bg: "red.50" 
-                      }}
+                      onClick={(e) => handleReaction(e, post.id, 'downvote')}
                     />
-                    <Text 
-                      fontSize="sm"
-                      fontWeight="medium"
-                      color={getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) > 0 ? "accent.500" : 
-                             getNetScore(post.reactions?.upvotes || 0, post.reactions?.downvotes || 0) < 0 ? "red.500" : 
-                             "gray.600"}
-                    >
-                      {post.reactions?.downvotes || 0}
-                    </Text>
                   </HStack>
-
                   <HStack spacing={2}>
                     <BiComment size={20} />
                     <Text>{post.comment_count || 0}</Text>
@@ -1077,30 +1043,25 @@ function Profile() {
               </Box>
             ))}
             
-            {/* Loading indicator - Only show on initial load */}
-            {isLoadingPosts && page === 1 && filteredPosts.length === 0 && (
-              <Center py={4}>
-                <Spinner size="lg" />
-              </Center>
-            )}
-            
-            {/* Loading more indicator */}
-            {isLoadingPosts && page > 1 && (
-              <Center py={4}>
-                <Spinner size="sm" />
-              </Center>
-            )}
-            
-            {/* Intersection observer target - Only show if we have more posts to load */}
-            {hasMore && !isLoadingPosts && <Box ref={ref} h="20px" />}
-            
             {/* No posts message - Only show when not loading and no posts */}
-            {!isLoadingPosts && filteredPosts.length === 0 && (
+            {!isLoadingPosts && posts.length === 0 && (
               <Box p={6} border="2px dashed" borderColor="paper.300" textAlign="center">
                 <Text color="paper.400" fontSize="lg">
                   No posts published yet
                 </Text>
               </Box>
+            )}
+            
+            {/* Loading more indicator */}
+            {isLoadingPosts && posts.length > 0 && (
+              <Center py={4}>
+                <Spinner size="md" color="accent.500" thickness="3px" />
+              </Center>
+            )}
+            
+            {/* Intersection observer target - Only render if we have more posts to load */}
+            {hasMore && !isLoadingPosts && (
+              <Box ref={ref} h="20px" w="100%" />
             )}
           </VStack>
         </Box>

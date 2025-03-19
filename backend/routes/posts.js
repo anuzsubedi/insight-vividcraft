@@ -461,131 +461,210 @@ function getSortQuery(query, sortBy = 'recent', period = 'all') {
 }
 
 // Get user posts by username
-router.get("/user/:username", async (req, res) => {
-    try {
-        const { 
-            username 
-        } = req.params;
-        const { 
-            category, 
-            type = "all", 
-            limit = 10, 
-            page = 1,
-            sortBy = "recent",
-            period = "all"
-        } = req.query;
-        const offset = (page - 1) * limit;
-
-        // First get the user ID
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("id")
-            .eq("username", username.toLowerCase())
-            .single();
-
-        if (userError || !user) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
-        // Build query for posts
-        let query = supabase
-            .from("posts")
-            .select(`
-                *,
-                author:users!posts_author_id_fkey (id, username, display_name, avatar_name),
-                category:categories!posts_category_id_fkey (id, name)
-            `)
-            .eq("author_id", user.id)
-            .eq("status", "published");
-
-        // Get total count for pagination
-        const { count } = await supabase
-            .from("posts")
-            .select("*", { count: 'exact' })
-            .eq("author_id", user.id)
-            .eq("status", "published");
-
-        // Apply filters
-        if (category && category !== "all") {
-            query = query.eq("category_id", category);
-        }
-        
-        if (type && type !== "all") {
-            query = query.eq("type", type);
-        }
-
-        // Apply sorting and time period filter
-        query = getSortQuery(query, sortBy, period);
-
-        // Apply pagination
-        query = query.range(offset, offset + limit - 1);
-
-        const { data: posts, error } = await query;
-
-        if (error) {
-            throw error;
-        }
-
-        // Add reactions to posts using helper function
-        const postsWithReactions = await Promise.all((posts || []).map(async (post) => {
-            const reactions = await getPostReactionsWithUser(post.id, req.user?.userId);
-            return {
-                ...post,
-                reactions: {
-                    upvotes: reactions.upvotes,
-                    downvotes: reactions.downvotes
-                },
-                userReaction: reactions.userReaction
-            };
-        }));
-
-        // Sort by reactions if using "top" sort
-        if (sortBy === 'top') {
-            postsWithReactions.sort((a, b) => {
-                const scoreA = (a.reactions?.upvotes || 0) - (a.reactions?.downvotes || 0);
-                const scoreB = (b.reactions?.upvotes || 0) - (b.reactions?.downvotes || 0);
-                return scoreB - scoreA;
-            });
-        }
-
-        // Get unique categories for this user's posts (for filters)
-        const { data: userCategories } = await supabase
-            .from("posts")
-            .select(`
-                *,
-                category:categories!posts_category_id_fkey (id, name)
-            `)
-            .eq("author_id", user.id)
-            .eq("status", "published");
-
-        const uniqueCategories = userCategories
-            ? Array.from(new Set(
-                userCategories
-                    .filter(post => post.category)
-                    .map(post => post.category)
-                    .filter((category, index, self) => 
-                        index === self.findIndex(c => c.id === category.id)
-                    )
-            ))
-            : [];
-
-        return res.status(200).json({ 
-            posts: postsWithReactions,
-            categories: uniqueCategories,
-            pagination: {
-                total: count || 0,
-                page: parseInt(page),
-                limit: parseInt(limit),
-                hasMore: count > offset + posts.length
-            }
-        });
-    } catch (error) {
-        console.error("Get user posts error:", error);
-        return res.status(500).json({
-            error: "Failed to fetch user posts",
-            details: error.message
-        });
+router.get("/user/:username", verifyToken, async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { page = 1, limit = 10, type = 'all', sortBy = 'recent', period = 'all' } = req.query;
+    const currentUserId = req.user?.userId;
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const offset = (pageNum - 1) * limitNum;
+    
+    // Get user ID from username - ensure case-insensitive comparison
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username.toLowerCase())
+      .single();
+      
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found' });
     }
+    
+    // Build the base query for counting total posts
+    let countQuery = supabase
+      .from('posts')
+      .select('*', { count: 'exact', head: true })
+      .eq('author_id', userData.id)
+      .eq('status', 'published');
+      
+    // Apply type filter to count query
+    if (type !== 'all') {
+      countQuery = countQuery.eq('type', type);
+    }
+    
+    // Apply time period filter for top posts to count query
+    if (sortBy === 'top') {
+      const now = new Date();
+      let startDate = new Date();
+      switch (period) {
+        case 'day':
+          startDate.setDate(now.getDate() - 1);
+          break;
+        case 'week':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case 'year':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        case 'all':
+        default:
+          startDate = new Date(0);
+          break;
+      }
+      countQuery = countQuery.gte('published_at', startDate.toISOString());
+    }
+    
+    // Get total count
+    const { count, error: countError } = await countQuery;
+    if (countError) {
+      console.error('Error getting post count:', countError);
+      return res.status(500).json({ error: 'Failed to get post count' });
+    }
+    
+    const total = count || 0;
+    
+    // If there are no posts, return empty array early
+    if (total === 0) {
+      return res.json({
+        posts: [],
+        pagination: {
+          total: 0,
+          page: pageNum,
+          limit: limitNum,
+          hasMore: false
+        }
+      });
+    }
+    
+    // Build the main query for fetching posts
+    let query = supabase
+      .from('posts')
+      .select(`
+        *,
+        category:categories (
+          id,
+          name
+        ),
+        author:users (
+          id,
+          username,
+          display_name,
+          avatar_name
+        ),
+        reactions:post_reactions (
+          reaction_type,
+          user_id
+        ),
+        comments(count)
+      `)
+      .eq('author_id', userData.id)
+      .eq('status', 'published');
+      
+    // Apply type filter
+    if (type !== 'all') {
+      query = query.eq('type', type);
+    }
+    
+    // Apply time period filter for top posts
+    if (sortBy === 'top') {
+      const now = new Date();
+      let startDate = new Date();
+      switch (period) {
+        case 'day':
+          startDate.setDate(now.getDate() - 1);
+          break;
+        case 'week':
+          startDate.setDate(now.getDate() - 7);
+          break;
+        case 'month':
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case 'year':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        case 'all':
+        default:
+          startDate = new Date(0);
+          break;
+      }
+      query = query.gte('published_at', startDate.toISOString());
+    }
+    
+    // Apply sorting at the database level
+    if (sortBy === 'top') {
+      // For top posts, we'll sort by published_at first to get the most recent posts
+      // Then we'll sort by score in memory
+      query = query.order('published_at', { ascending: false });
+    } else {
+      // For recent posts, sort by published_at
+      query = query.order('published_at', { ascending: false });
+    }
+    
+    // Apply pagination at the database level
+    query = query.range(offset, offset + limitNum - 1);
+    
+    // Get paginated posts
+    const { data: posts, error: postsError } = await query;
+    
+    if (postsError) {
+      console.error('Error fetching posts:', postsError);
+      return res.status(500).json({ error: 'Failed to fetch posts' });
+    }
+    
+    // Process posts to include reactions
+    const processedPosts = posts.map(post => {
+      // Calculate reaction counts
+      const upvotes = post.reactions.filter(r => r.reaction_type === 'upvote').length;
+      const downvotes = post.reactions.filter(r => r.reaction_type === 'downvote').length;
+      
+      // Get user's reaction
+      const userReaction = post.reactions.find(r => r.user_id === currentUserId)?.reaction_type || null;
+      
+      // Get comment count
+      const comment_count = post.comments?.length ? post.comments[0].count : 0;
+      
+      // Remove the reactions array and comments from the response
+      const { reactions, comments, ...postWithoutReactions } = post;
+      
+      return {
+        ...postWithoutReactions,
+        reactions: {
+          upvotes,
+          downvotes
+        },
+        userReaction,
+        comment_count,
+        // Add score for sorting
+        score: upvotes - downvotes
+      };
+    });
+    
+    // Apply top sorting in memory if needed
+    if (sortBy === 'top') {
+      processedPosts.sort((a, b) => b.score - a.score);
+    }
+    
+    // Calculate if there are more posts
+    const hasMore = offset + processedPosts.length < total;
+    
+    // Return response
+    res.json({
+      posts: processedPosts,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        hasMore
+      }
+    });
+  } catch (error) {
+    console.error('Error in /user/:username endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get scheduled posts for publication

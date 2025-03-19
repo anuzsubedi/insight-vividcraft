@@ -25,7 +25,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { searchService } from "../services/searchService"; // Add this import
 
 // Helper function to get net score
-const getNetScore = (upvotes, downvotes) => upvotes - downvotes;
+const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
 
 function ViewPost() {
   const { id } = useParams();
