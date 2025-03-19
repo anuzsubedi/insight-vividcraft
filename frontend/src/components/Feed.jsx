@@ -47,7 +47,10 @@ function Feed() {
     const [categories, setCategories] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [feedType, setFeedType] = useState('following');
-    const { ref, inView } = useInView();
+    const { ref, inView } = useInView({
+        threshold: 0,
+        rootMargin: '100px',
+    });
     const toast = useToast();
     const navigate = useNavigate();
     const location = useLocation();
@@ -56,6 +59,7 @@ function Feed() {
     const [sortPeriod, setSortPeriod] = useState('all');
     const [reportPostId, setReportPostId] = useState({ id: '', type: 'post' });
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
     // Load categories on mount
     useEffect(() => {
@@ -71,14 +75,15 @@ function Feed() {
     }, []);
 
     // Load posts
-    const loadPosts = useCallback(async () => {
-        if (isLoading || !hasMore) return;
+    const loadPosts = useCallback(async (pageNum = 1) => {
+        if (isLoading || (!hasMore && pageNum > 1)) return;
+        
         setIsLoading(true);
         
         try {
             let response;
             const params = {
-                page,
+                page: pageNum,
                 limit: 10,
                 sort: sortType,
                 period: sortType === 'top' ? sortPeriod : undefined,
@@ -103,11 +108,10 @@ function Feed() {
             setTotalPosts(response.pagination.total);
             
             // Update posts list
-            if (page === 1) {
+            if (pageNum === 1) {
                 setPosts(response.posts);
             } else {
                 setPosts(prevPosts => {
-                    // Get unique posts by filtering out duplicates
                     const existingIds = new Set(prevPosts.map(post => post.id));
                     const newPosts = response.posts.filter(post => !existingIds.has(post.id));
                     return [...prevPosts, ...newPosts];
@@ -115,6 +119,7 @@ function Feed() {
             }
 
             setHasMore(response.pagination.hasMore);
+            setIsInitialLoad(false);
         } catch (error) {
             console.error('Feed error:', error);
             toast({
@@ -128,7 +133,7 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, page, selectedCategories, isLoading, hasMore, toast, sortType, sortPeriod]);
+    }, [feedType, selectedCategories, sortType, sortPeriod, toast]);
 
     // Reset feed when type or sort changes
     useEffect(() => {
@@ -136,19 +141,17 @@ function Feed() {
         setPage(1);
         setHasMore(true);
         setTotalPosts(0);
-    }, [feedType, selectedCategories, sortType, sortPeriod]);
+        setIsInitialLoad(true);
+        loadPosts(1);
+    }, [feedType, selectedCategories, sortType, sortPeriod, loadPosts]);
 
-    // Load more posts when scrolling to bottom
+    // Handle infinite scroll
     useEffect(() => {
-        if (inView && !isLoading && hasMore) {
+        if (inView && !isLoading && hasMore && !isInitialLoad) {
             setPage(prev => prev + 1);
+            loadPosts(page + 1);
         }
-    }, [inView, isLoading, hasMore]);
-
-    // Initial load and pagination
-    useEffect(() => {
-        loadPosts();
-    }, [loadPosts, page]);
+    }, [inView, isLoading, hasMore, isInitialLoad, page, loadPosts]);
 
     const handleReaction = async (e, postId, type) => {
         e.stopPropagation(); // Prevent post click event
