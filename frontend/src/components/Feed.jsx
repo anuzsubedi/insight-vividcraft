@@ -133,7 +133,7 @@ function Feed() {
         } finally {
             setIsLoading(false);
         }
-    }, [feedType, selectedCategories, sortType, sortPeriod, toast]);
+    }, [feedType, selectedCategories, sortType, sortPeriod, toast, hasMore, isLoading]);
 
     // Reset feed when type or sort changes
     useEffect(() => {
