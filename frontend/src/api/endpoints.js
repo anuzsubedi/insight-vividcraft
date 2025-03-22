@@ -89,6 +89,8 @@ export const ENDPOINTS = {
         LIST: '/notifications',
         MARK_VIEWED: '/notifications/viewed',
         MARK_OPENED: '/notifications/opened',
-        UNREAD_COUNT: '/notifications/unread-count'
+        UNREAD_COUNT: '/notifications/unread-count',
+        PREFERENCES: '/notifications/preferences',
+        CREATE: '/notifications'
     }
 };

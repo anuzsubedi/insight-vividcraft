@@ -124,4 +124,114 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     }
 });
 
+// Get user notification preferences
+router.get('/preferences', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        const { data: preferences, error } = await supabase
+            .from('notification_preferences')
+            .select('*')
+            .eq('user_id', userId);
+
+        if (error) throw error;
+
+        // Transform preferences to match frontend expectations
+        const transformedPreferences = {
+            email_notifications: preferences?.some(p => p.delivery_method.includes('email')) ?? true,
+            push_notifications: preferences?.some(p => p.delivery_method.includes('websocket')) ?? true
+        };
+
+        res.json(transformedPreferences);
+    } catch (error) {
+        console.error('Error getting notification preferences:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update user notification preferences
+router.put('/preferences', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { email_notifications, push_notifications } = req.body;
+        const now = new Date().toISOString();
+
+        // Delete existing preferences
+        const { error: deleteError } = await supabase
+            .from('notification_preferences')
+            .delete()
+            .eq('user_id', userId);
+
+        if (deleteError) throw deleteError;
+
+        // Insert new preferences
+        const preferences = [];
+        if (email_notifications) {
+            preferences.push({
+                user_id: userId,
+                notification_type: 'all',
+                is_enabled: true,
+                delivery_method: ['email'],
+                updated_at: now
+            });
+        }
+        if (push_notifications) {
+            preferences.push({
+                user_id: userId,
+                notification_type: 'all',
+                is_enabled: true,
+                delivery_method: ['websocket'],
+                updated_at: now
+            });
+        }
+
+        if (preferences.length > 0) {
+            const { error: insertError } = await supabase
+                .from('notification_preferences')
+                .insert(preferences);
+
+            if (insertError) throw insertError;
+        }
+
+        res.json({
+            email_notifications,
+            push_notifications
+        });
+    } catch (error) {
+        console.error('Error updating notification preferences:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create a new notification (for testing or manual creation)
+router.post('/', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { type, actor_id, post_id, comment_id, content } = req.body;
+        const now = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from('notifications')
+            .insert({
+                user_id: userId,
+                type,
+                actor_id,
+                post_id,
+                comment_id,
+                content,
+                created_at: now,
+                updated_at: now
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json(data);
+    } catch (error) {
+        console.error('Error creating notification:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
