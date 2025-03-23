@@ -104,4 +104,32 @@ export const generateToken = (user) => {
     );
 };
 
+export const verifyWebSocketToken = async (token) => {
+    try {
+        if (!process.env.JWT_SECRET) {
+            throw new Error('JWT_SECRET is not configured');
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Verify user exists and is active in database with retries
+        const { user, error } = await verifyUserInDb(decoded.userId);
+        
+        if (error || !user) {
+            console.error('User verification error:', error || 'User not found');
+            return null;
+        }
+
+        return {
+            userId: user.id,
+            username: user.username,
+            email: user.email,
+            isAdmin: user.is_admin || false
+        };
+    } catch (error) {
+        console.error('WebSocket token verification error:', error);
+        return null;
+    }
+};
+
 export default verifyToken;

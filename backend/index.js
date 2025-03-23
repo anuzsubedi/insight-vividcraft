@@ -15,19 +15,26 @@ import mentionsRoutes from "./routes/mentions.js";
 import notificationsRoutes from "./routes/notifications.js";
 import permissionsRoutes from "./routes/permissions.js";
 import usersRoutes from "./routes/users.js";
+import { createServer } from 'http';
+import NotificationWebSocketServer from './websocket/notificationServer.js';
+import errorHandler from './middleware/errorHandler.js';
 
 // Load environment variables
 dotenv.config();
 
 // Initialize express app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const server = createServer(app);
+
+// Initialize WebSocket server
+const notificationServer = new NotificationWebSocketServer(server);
 
 // Apply middleware
 app.use(cors({
-    origin: 'http://localhost:5173', // Replace with your frontend URL
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -65,23 +72,10 @@ app.get("/health", (_req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('[ERROR]', {
-        method: req.method,
-        url: req.url,
-        error: {
-            message: err.message,
-            stack: err.stack,
-            name: err.name
-        }
-    });
-    
-    res.status(err.status || 500).json({
-        error: err.message || 'Internal Server Error'
-    });
-});
+app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });

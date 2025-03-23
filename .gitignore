@@ -44,3 +44,13 @@ Thumbs.db
 
 # Cache
 .cache
+
+
+# Supabase
+supabase/migrations
+supabase/seed.sql
+supabase/seed.ts
+supabase/seed.ts
+supabase/seed.ts
+supabase/seed.ts
+supabase/.temp/
