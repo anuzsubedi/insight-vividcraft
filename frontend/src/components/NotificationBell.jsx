@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
     IconButton,
     Box,
@@ -17,7 +17,6 @@ import {
     useColorModeValue,
     Tooltip,
     useDisclosure,
-    Button,
     Avatar,
     Portal,
     useBreakpointValue
@@ -34,6 +33,7 @@ const NotificationBell = () => {
     const navigate = useNavigate();
     const toast = useToast();
     const { isOpen, onOpen, onClose } = useDisclosure();
+    const popoverContentRef = useRef(null);
     
     // Use Zustand notification state
     const { 
@@ -73,6 +73,14 @@ const NotificationBell = () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [fetchInitialUnreadCount]);
+
+    // Load notifications when there's a new unread notification
+    useEffect(() => {
+        if (unreadCount > 0 && !hasFetchedNotifications && !loading) {
+            // Fetch notifications in the background when we have unread notifications
+            fetchNotifications();
+        }
+    }, [unreadCount, hasFetchedNotifications, loading, fetchNotifications]);
 
     // WebSocket connection for real-time notifications (only when logged in)
     useEffect(() => {
@@ -122,8 +130,23 @@ const NotificationBell = () => {
         };
     }, [user, fetchInitialUnreadCount]);
 
+    // Fix scrolling behavior (remove the old approach that wasn't working well)
+    useEffect(() => {
+        if (isOpen) {
+            // When popover is opened, prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        } else {
+            // Restore scrolling when popover is closed
+            document.body.style.overflow = 'auto';
+        }
+        
+        return () => {
+            // Cleanup - ensure scrolling is restored when component unmounts
+            document.body.style.overflow = 'auto';
+        };
+    }, [isOpen]);
+
     const handleUnreadCount = (data) => {
-        console.log('Received unread count:', data);
         setUnreadCount(data.count || 0);
     };
 
@@ -143,6 +166,11 @@ const NotificationBell = () => {
         // If popover is open, add the new notification to the list
         if (isOpen) {
             addNotification(data.notification);
+        }
+        
+        // If notifications haven't been fetched yet, fetch them now
+        if (!hasFetchedNotifications && !loading) {
+            fetchNotifications();
         }
     };
 
@@ -412,9 +440,9 @@ const NotificationBell = () => {
         );
     };
 
-    // Debug the unread count when it changes
+    // Remove debug output
     useEffect(() => {
-        console.log('Current unread notification count:', unreadCount);
+        // Unread count change handler (no logging needed)
     }, [unreadCount]);
 
     return (
@@ -422,8 +450,18 @@ const NotificationBell = () => {
             isOpen={isOpen}
             onOpen={onOpen}
             onClose={onClose}
-            placement="bottom-end"
-            closeOnBlur={false}
+            placement="bottom"
+            closeOnBlur={true}
+            gutter={2}
+            modifiers={[
+                {
+                    name: 'preventOverflow',
+                    options: {
+                        boundary: 'viewport'
+                    }
+                }
+            ]}
+            strategy="fixed"
         >
             <PopoverTrigger>
                 <Box position="relative" display="inline-block">
@@ -461,27 +499,60 @@ const NotificationBell = () => {
             </PopoverTrigger>
             <Portal>
                 <PopoverContent
+                    ref={popoverContentRef}
                     width={isMobile ? '100vw' : '400px'}
                     maxH="80vh"
                     overflowY="auto"
+                    position="fixed"
+                    zIndex={1400}
+                    right="-2"
+                    top="5"
+                    boxShadow="md"
+                    borderRadius="md"
+                    border="2px solid black"
                 >
                     <PopoverArrow />
                     <PopoverBody p={0}>
                         <VStack spacing={0} align="stretch">
-                            <Box p={4} borderBottom="1px" borderColor={borderColor}>
-                                <HStack justify="space-between">
+                            <Box p={3} borderBottom="1px" borderColor={borderColor}>
+                                <HStack justify="space-between" align="center">
                                     <Text fontWeight="bold" fontSize="lg">
                                         Notifications
                                     </Text>
-                                    {unreadCount > 0 && (
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={handleMarkAllAsRead}
+                                    <HStack spacing={1}>
+                                        {unreadCount > 0 && (
+                                            <Box
+                                                as="button"
+                                                p={1}
+                                                borderRadius="md"
+                                                onClick={handleMarkAllAsRead}
+                                                title="Mark all as read"
+                                                display="flex"
+                                                alignItems="center"
+                                                justifyContent="center"
+                                                bg="transparent"
+                                                _hover={{ bg: "gray.100" }}
+                                                height="32px"
+                                            >
+                                                <Text fontSize="xs" fontWeight="medium">Mark all read</Text>
+                                            </Box>
+                                        )}
+                                        <Box 
+                                            onClick={onClose}
+                                            cursor="pointer"
+                                            bg="white"
+                                            w="28px"
+                                            h="28px"
+                                            borderRadius="full"
+                                            display="flex"
+                                            alignItems="center"
+                                            justifyContent="center"
+                                            border="2px solid black"
+                                            _hover={{ bg: "gray.100" }}
                                         >
-                                            Mark all as read
-                                        </Button>
-                                    )}
+                                            <Text fontSize="md" fontWeight="bold">×</Text>
+                                        </Box>
+                                    </HStack>
                                 </HStack>
                             </Box>
 

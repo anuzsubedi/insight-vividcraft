@@ -41,15 +41,12 @@ class NotificationWebSocketServer {
                 // Check if user already has an active connection
                 const existingConnections = this.clients.get(userId);
                 if (existingConnections?.size > 0) {
-                    console.log('Closing existing connection for user:', userId);
                     existingConnections.forEach(client => {
                         if (client !== ws) {
                             client.close(1000, 'New connection established');
                         }
                     });
                 }
-
-                console.log('New WebSocket connection for user:', userId);
 
                 // Store the connection
                 if (!this.clients.has(userId)) {
@@ -76,7 +73,6 @@ class NotificationWebSocketServer {
 
                 // Handle client disconnect
                 ws.on('close', () => {
-                    console.log('WebSocket disconnected for user:', userId);
                     this.handleClientDisconnect(userId, ws);
                 });
 
@@ -114,8 +110,6 @@ class NotificationWebSocketServer {
             console.error('No user ID found when handling client message');
             return;
         }
-
-        console.log('Handling client message for user:', userId, 'Type:', data.type);
 
         switch (data.type) {
             case 'ping':

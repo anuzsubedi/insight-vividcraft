@@ -46,7 +46,6 @@ class WebSocketService {
         }
 
         if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
-            console.log('WebSocket already connecting or connected');
             return;
         }
 
@@ -54,7 +53,6 @@ class WebSocketService {
         this.token = token;
         this.isPageLoading = false;
         const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:5000'}/ws?token=${encodeURIComponent(token)}`;
-        console.log('Connecting to WebSocket:', wsUrl);
         
         try {
             this.ws = new WebSocket(wsUrl);
@@ -68,7 +66,6 @@ class WebSocketService {
             }, 5000);
 
             this.ws.onopen = () => {
-                console.log('WebSocket connected successfully');
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
                 this.pendingReconnect = false;
@@ -83,11 +80,9 @@ class WebSocketService {
             };
 
             this.ws.onclose = (event) => {
-                console.log('WebSocket disconnected:', {
-                    code: event.code,
-                    reason: event.reason,
-                    wasClean: event.wasClean
-                });
+                if (event.code !== 1000 && !this.isPageLoading) {
+                    console.info('WebSocket disconnected');
+                }
                 this.isConnecting = false;
                 if (this.connectionTimeout) {
                     clearTimeout(this.connectionTimeout);
@@ -100,8 +95,8 @@ class WebSocketService {
                 }
             };
 
-            this.ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
+            this.ws.onerror = () => {
+                console.error('WebSocket error');
                 this.isConnecting = false;
                 if (this.connectionTimeout) {
                     clearTimeout(this.connectionTimeout);
@@ -112,7 +107,6 @@ class WebSocketService {
             this.ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log('Received WebSocket message:', data);
                     this.handleMessage(data);
                 } catch (error) {
                     console.error('Error parsing WebSocket message:', error);
@@ -164,7 +158,6 @@ class WebSocketService {
             this.pendingReconnect = true;
             this.reconnectAttempts++;
             const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-            console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             setTimeout(() => {
                 this.pendingReconnect = false;
                 this.connect(this.token);
@@ -190,7 +183,6 @@ class WebSocketService {
         // Update notification state directly if possible
         if (this.notificationStore) {
             if (data.type === 'unread_count') {
-                console.log('Setting unread count in store:', data.count);
                 this.notificationStore.setUnreadCount(data.count || 0);
             } else if (data.type === 'new_notification') {
                 this.notificationStore.incrementUnreadCount();
@@ -208,7 +200,6 @@ class WebSocketService {
                 this.notificationStore = useNotificationState.getState();
                 // Retry handling the message if we now have the store
                 if (this.notificationStore) {
-                    console.log('Notification store initialized, retrying message handling');
                     this.handleMessage(data);
                     return;
                 }
