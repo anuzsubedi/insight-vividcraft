@@ -328,6 +328,48 @@ class NotificationWebSocketServer {
                 return;
             }
 
+            // Add preview content if not provided
+            if (!notification.preview_content || !notification.post_id) {
+                try {
+                    if (notification.target_type === 'post' && notification.target_id) {
+                        // For posts, get the title or first part of content
+                        const { data: post, error: postError } = await supabase
+                            .from('posts')
+                            .select('id, title, content')
+                            .eq('id', notification.target_id)
+                            .single();
+                            
+                        if (!postError && post) {
+                            notification.preview_content = notification.preview_content || post.title || (post.content ? post.content.substring(0, 100) : '');
+                            // Set post_id if it's not already set
+                            if (!notification.post_id) {
+                                notification.post_id = post.id;
+                            }
+                        }
+                    } else if (notification.target_type === 'comment' && notification.target_id) {
+                        // For comments, get the content and the associated post
+                        const { data: comment, error: commentError } = await supabase
+                            .from('comments')
+                            .select('content, post_id')
+                            .eq('id', notification.target_id)
+                            .single();
+                            
+                        if (!commentError && comment) {
+                            if (comment.content) {
+                                notification.preview_content = notification.preview_content || comment.content.substring(0, 100);
+                            }
+                            
+                            // Set post_id from the comment if not already set
+                            if (!notification.post_id && comment.post_id) {
+                                notification.post_id = comment.post_id;
+                            }
+                        }
+                    }
+                } catch (previewError) {
+                    console.error('Error fetching preview content:', previewError);
+                }
+            }
+
             // Insert notification into database
             const { data, error } = await supabase
                 .from('notifications')

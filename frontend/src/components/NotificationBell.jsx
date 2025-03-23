@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
     IconButton,
     Box,
@@ -24,8 +24,8 @@ import {
 } from '@chakra-ui/react';
 import { Bell, BellOff } from 'lucide-react';
 import useAuthState from '../hooks/useAuthState';
+import useNotificationState from '../hooks/useNotificationState';
 import websocketService from '../services/websocketService';
-import { notificationService } from '../services/notificationService';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,16 +34,47 @@ const NotificationBell = () => {
     const navigate = useNavigate();
     const toast = useToast();
     const { isOpen, onOpen, onClose } = useDisclosure();
-    const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [hasFetchedNotifications, setHasFetchedNotifications] = useState(false);
+    
+    // Use Zustand notification state
+    const { 
+        unreadCount, 
+        notifications, 
+        loading, 
+        hasFetchedNotifications,
+        fetchInitialUnreadCount,
+        setUnreadCount,
+        incrementUnreadCount,
+        fetchNotifications,
+        markAsViewed,
+        markAsOpened,
+        addNotification
+    } = useNotificationState();
 
     const borderColor = useColorModeValue('gray.200', 'gray.700');
     const hoverBg = useColorModeValue('gray.50', 'gray.700');
+    const unreadBg = useColorModeValue('blue.50', 'blue.900');
+    const previewBg = useColorModeValue('gray.100', 'gray.800');
     const isMobile = useBreakpointValue({ base: true, md: false });
 
-    // WebSocket connection for real-time notifications
+    // Load initial unread count when component mounts
+    useEffect(() => {
+        fetchInitialUnreadCount();
+        
+        // Also set up a listener for when the page becomes visible
+        const handleVisibilityChange = async () => {
+            if (document.visibilityState === 'visible') {
+                fetchInitialUnreadCount();
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [fetchInitialUnreadCount]);
+
+    // WebSocket connection for real-time notifications (only when logged in)
     useEffect(() => {
         if (!user) return;
 
@@ -60,11 +91,6 @@ const NotificationBell = () => {
         websocketService.on('unread_count', handleUnreadCount);
         websocketService.on('new_notification', handleNewNotification);
 
-        // Request initial unread count
-        notificationService.getUnreadCount().then(count => {
-            setUnreadCount(count);
-        });
-
         return () => {
             websocketService.off('unread_count');
             websocketService.off('new_notification');
@@ -77,28 +103,24 @@ const NotificationBell = () => {
         if (isOpen && !hasFetchedNotifications) {
             fetchNotifications();
         }
-    }, [isOpen, hasFetchedNotifications]);
+    }, [isOpen, hasFetchedNotifications, fetchNotifications]);
 
-    const fetchNotifications = async () => {
-        try {
-            setLoading(true);
-            const data = await notificationService.getNotifications();
-            setNotifications(data.notifications || []);
-            setHasFetchedNotifications(true);
-        } catch (error) {
-            console.error('Error fetching notifications:', error);
-            toast({
-                title: 'Error',
-                description: 'Failed to load notifications',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-                position: 'top-right'
-            });
-        } finally {
-            setLoading(false);
+    // Real-time update of unread count when user is logged in
+    useEffect(() => {
+        let intervalId;
+        
+        if (user) {
+            intervalId = setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    fetchInitialUnreadCount();
+                }
+            }, 30000); // Check every 30 seconds
         }
-    };
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [user, fetchInitialUnreadCount]);
 
     const handleUnreadCount = (data) => {
         console.log('Received unread count:', data);
@@ -106,7 +128,7 @@ const NotificationBell = () => {
     };
 
     const handleNewNotification = (data) => {
-        setUnreadCount(prev => prev + 1);
+        incrementUnreadCount();
         
         // Show toast notification
         toast({
@@ -120,107 +142,131 @@ const NotificationBell = () => {
 
         // If popover is open, add the new notification to the list
         if (isOpen) {
-            setNotifications(prev => [data.notification, ...prev]);
+            addNotification(data.notification);
         }
     };
 
-    const handleMarkAsViewed = async (notificationIds) => {
-        if (!notificationIds || notificationIds.length === 0) {
-            console.log('No notifications to mark as viewed');
-            return;
-        }
-
-        try {
-            await notificationService.markAsViewed(notificationIds);
-            setUnreadCount(prev => Math.max(0, prev - notificationIds.length));
-            
-            // Update local notifications state
-            setNotifications(prev => 
-                prev.map(notification => 
-                    notificationIds.includes(notification.id)
-                        ? { ...notification, is_viewed: true }
-                        : notification
-                )
-            );
-        } catch (error) {
-            console.error('Error marking notifications as viewed:', error);
-            toast({
-                title: 'Error',
-                description: 'Failed to mark notifications as read',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-                position: 'top-right'
-            });
-        }
-    };
-
-    const handleMarkAsOpened = async (notificationId) => {
-        if (!notificationId) {
-            console.log('No notification ID to mark as opened');
-            return;
-        }
-
-        try {
-            await notificationService.markAsOpened(notificationId);
-            
-            // Update local notifications state
-            setNotifications(prev => 
-                prev.map(notification => 
-                    notification.id === notificationId
-                        ? { ...notification, is_opened: true }
-                        : notification
-                )
-            );
-        } catch (error) {
-            console.error('Error marking notification as opened:', error);
-            toast({
-                title: 'Error',
-                description: 'Failed to mark notification as opened',
-                status: 'error',
-                duration: 5000,
-                isClosable: true,
-                position: 'top-right'
-            });
+    const handleMarkAllAsRead = () => {
+        const unreadIds = notifications
+            .filter(n => !n.is_viewed)
+            .map(n => n.id);
+        
+        if (unreadIds.length > 0) {
+            markAsViewed(unreadIds);
         }
     };
 
     const handleNotificationClick = async (notification) => {
+        // Mark as opened (navigated to) and viewed (read)
+        const notificationPromises = [];
+        
         if (!notification.is_opened) {
-            await handleMarkAsOpened(notification.id);
+            notificationPromises.push(markAsOpened(notification.id));
         }
+        
+        if (!notification.is_viewed) {
+            notificationPromises.push(markAsViewed([notification.id]));
+        }
+        
+        // Wait for all operations to complete
+        await Promise.all(notificationPromises);
+
+        // Close the popover
+        onClose();
 
         // Handle navigation based on notification type
         switch (notification.type) {
-            case 'comment':
-            case 'reply':
-                if (notification.post_id) {
-                    navigate(`/posts/${notification.post_id}`, { 
-                        state: { scrollToComment: notification.target_id }
+            case 'comment': {
+                // Navigate to the post with the comment highlighted
+                // If post_id is null, try to use target_id as the post id
+                const commentPostId = notification.post_id || notification.target_id;
+                if (commentPostId) {
+                    navigate(`/posts/${commentPostId}`, { 
+                        state: { 
+                            scrollToComment: notification.target_id,
+                            highlightComment: true
+                        }
                     });
                 }
                 break;
+            }
+            case 'reply': {
+                // Navigate to the post with the reply highlighted
+                const replyPostId = notification.post_id || notification.target_id;
+                if (replyPostId) {
+                    navigate(`/posts/${replyPostId}`, { 
+                        state: { 
+                            scrollToComment: notification.target_id,
+                            highlightComment: true,
+                            scrollToParentComment: notification.parent_comment_id 
+                        }
+                    });
+                }
+                break;
+            }
             case 'vote':
-                if (notification.post_id) {
-                    navigate(`/posts/${notification.post_id}`);
+                // Navigate to the post or comment that was voted on
+                if (notification.target_type === 'post' && notification.target_id) {
+                    navigate(`/posts/${notification.target_id}`);
+                } else if (notification.target_type === 'comment' && notification.post_id) {
+                    navigate(`/posts/${notification.post_id}`, { 
+                        state: { 
+                            scrollToComment: notification.target_id,
+                            highlightComment: true 
+                        }
+                    });
+                } else if (notification.target_id) {
+                    // Fallback, try to use target_id directly
+                    navigate(`/posts/${notification.target_id}`);
                 }
                 break;
             case 'follow':
-                if (notification.target_id) {
-                    navigate(`/profile/${notification.target_id}`);
+                // Navigate to the profile of the user who followed
+                if (notification.actors?.[0]?.user?.username) {
+                    navigate(`/profile/${notification.actors[0].user.username}`);
+                } else if (notification.actors?.[0]) {
+                    const actor = notification.actors[0];
+                    // Try to get username from the actor object itself
+                    const username = actor.user?.username || actor.username;
+                    if (username) {
+                        navigate(`/profile/${username}`);
+                    }
+                }
+                break;
+            case 'vote_milestone':
+            case 'follow_milestone':
+                // For milestones related to posts, navigate to the post
+                if (notification.target_type === 'post' && notification.target_id) {
+                    navigate(`/posts/${notification.target_id}`);
+                } else if (notification.target_type === 'profile') {
+                    // For profile milestones, navigate to own profile
+                    navigate(`/profile`);
                 }
                 break;
             default:
+                console.log('Unknown notification type:', notification.type);
                 break;
         }
     };
 
     const getNotificationTitle = (notification) => {
-        const actor = notification.actors?.[0];
+        // Get actor info with proper fallbacks
+        let actor;
+        if (notification.actors && notification.actors.length > 0) {
+            // Check if actor is nested under 'user' property
+            if (notification.actors[0].user) {
+                actor = notification.actors[0].user;
+            } else {
+                actor = notification.actors[0];
+            }
+        } else if (notification.actor) {
+            actor = notification.actor;
+        }
+
         if (!actor) return 'New Notification';
 
-        // Get the user's display name or username
-        const actorName = actor.display_name || actor.username || 'Unknown User';
+        // Prefer username over display_name (reversed from before)
+        const actorName = actor.username || actor.display_name || 'Unknown User';
 
         switch (notification.type) {
             case 'comment':
@@ -228,7 +274,7 @@ const NotificationBell = () => {
             case 'reply':
                 return `${actorName} replied`;
             case 'vote':
-                return `${actorName} ${notification.reaction_type}d`;
+                return `${actorName} ${notification.reaction_type || 'liked'}`;
             case 'follow':
                 return `${actorName} followed you`;
             case 'vote_milestone':
@@ -241,8 +287,22 @@ const NotificationBell = () => {
     };
 
     const getNotificationDescription = (notification) => {
-        const actor = notification.actors?.[0];
+        // Get actor info with proper fallbacks
+        let actor;
+        if (notification.actors && notification.actors.length > 0) {
+            // Check if actor is nested under 'user' property
+            if (notification.actors[0].user) {
+                actor = notification.actors[0].user;
+            } else {
+                actor = notification.actors[0];
+            }
+        } else if (notification.actor) {
+            actor = notification.actor;
+        }
+
         if (!actor) return 'You have a new notification';
+
+        // Now using username over display_name to match title
 
         switch (notification.type) {
             case 'comment':
@@ -250,13 +310,13 @@ const NotificationBell = () => {
             case 'reply':
                 return `to your comment`;
             case 'vote':
-                return `your ${notification.target_type}`;
+                return `your ${notification.target_type || 'post'}`;
             case 'follow':
                 return `Started following you`;
             case 'vote_milestone':
-                return `Your ${notification.target_type} reached ${notification.milestone_value} ${notification.reaction_type}s!`;
+                return `Your ${notification.target_type || 'post'} reached ${notification.milestone_value || 'many'} ${notification.reaction_type || 'likes'}!`;
             case 'follow_milestone':
-                return `You reached ${notification.milestone_value} followers!`;
+                return `You reached ${notification.milestone_value || 'many'} followers!`;
             default:
                 return 'You have a new notification';
         }
@@ -265,33 +325,57 @@ const NotificationBell = () => {
     const renderNotificationContent = (notification) => {
         const isUnread = !notification.is_viewed;
         const timeAgo = formatDistanceToNow(new Date(notification.created_at), { addSuffix: true });
-        const actor = notification.actors?.[0];
+        
+        // Get actor info with proper fallbacks
+        let actor;
+        if (notification.actors && notification.actors.length > 0) {
+            // Check if actor is nested under 'user' property
+            if (notification.actors[0].user) {
+                actor = notification.actors[0].user;
+            } else {
+                actor = notification.actors[0];
+            }
+        } else if (notification.actor) {
+            actor = notification.actor;
+        }
         
         if (!actor) {
             console.warn('Notification missing actor data:', notification);
             return null;
         }
 
-        const actorName = actor.display_name || actor.username || 'Unknown User';
-        const actorAvatar = actor.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(actorName)}&background=random`;
+        // Get the user details - prefer username over display_name
+        const actorName = actor.username || actor.display_name || 'Unknown User';
+        
+        // Match the avatar display format used in Header.jsx
+        const avatarName = actor.avatar_name || '';
+        const avatarUrl = avatarName ? `/avatars/${avatarName}` : undefined;
+        
+        // Get preview content from notification or truncate if too long
+        const previewContent = notification.preview_content || '';
+        const truncatedPreview = previewContent.length > 60 
+            ? previewContent.substring(0, 60) + '...' 
+            : previewContent;
 
         return (
             <Box
                 key={notification.id}
                 p={4}
-                bg={isUnread ? 'blue.50' : 'transparent'}
+                bg={isUnread ? unreadBg : 'transparent'}
                 _hover={{ bg: hoverBg }}
                 cursor="pointer"
                 onClick={() => handleNotificationClick(notification)}
                 transition="all 0.2s"
                 borderRadius="md"
+                borderBottom="1px"
+                borderColor={borderColor}
             >
                 <HStack spacing={3} align="start">
                     <Avatar
                         name={actorName}
-                        src={actorAvatar}
+                        src={avatarUrl}
                         size="sm"
-                        showBorder
+                        border="2px solid black"
                     />
                     <VStack align="start" spacing={1} flex={1}>
                         <Text fontWeight="medium">
@@ -300,6 +384,20 @@ const NotificationBell = () => {
                         <Text fontSize="sm" color="gray.600">
                             {getNotificationDescription(notification)}
                         </Text>
+                        
+                        {truncatedPreview && (
+                            <Box 
+                                p={2} 
+                                bg={previewBg} 
+                                borderRadius="md" 
+                                width="100%"
+                                fontSize="sm"
+                                fontStyle="italic"
+                            >
+                                &ldquo;{truncatedPreview}&rdquo;
+                            </Box>
+                        )}
+                        
                         <Text fontSize="xs" color="gray.500">
                             {timeAgo}
                         </Text>
@@ -314,6 +412,11 @@ const NotificationBell = () => {
         );
     };
 
+    // Debug the unread count when it changes
+    useEffect(() => {
+        console.log('Current unread notification count:', unreadCount);
+    }, [unreadCount]);
+
     return (
         <Popover
             isOpen={isOpen}
@@ -323,38 +426,38 @@ const NotificationBell = () => {
             closeOnBlur={false}
         >
             <PopoverTrigger>
-                <Tooltip label="Notifications">
-                    <IconButton
-                        icon={<Bell />}
-                        aria-label="Notifications"
-                        variant="ghost"
-                        position="relative"
-                        size="lg"
-                        onClick={onOpen}
-                    >
-                        {unreadCount > 0 && (
-                            <Box
-                                position="absolute"
-                                top={2}
-                                right={2}
-                                bg="red.500"
-                                color="white"
-                                borderRadius="full"
-                                minW="20px"
-                                h="20px"
-                                display="flex"
-                                alignItems="center"
-                                justifyContent="center"
-                                fontSize="xs"
-                                fontWeight="bold"
-                                zIndex={1}
-                                boxShadow="0 0 0 2px white"
-                            >
-                                {unreadCount}
-                            </Box>
-                        )}
-                    </IconButton>
-                </Tooltip>
+                <Box position="relative" display="inline-block">
+                    <Tooltip label="Notifications">
+                        <IconButton
+                            icon={<Bell />}
+                            aria-label="Notifications"
+                            variant="ghost"
+                            size="lg"
+                            onClick={onOpen}
+                        />
+                    </Tooltip>
+                    {unreadCount > 0 && (
+                        <Box
+                            position="absolute"
+                            top={1}
+                            right={1}
+                            bg="red.500"
+                            color="white"
+                            borderRadius="full"
+                            minW="18px"
+                            h="18px"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                            fontSize="xs"
+                            fontWeight="bold"
+                            zIndex={2}
+                            boxShadow="0 0 0 2px white"
+                        >
+                            {unreadCount}
+                        </Box>
+                    )}
+                </Box>
             </PopoverTrigger>
             <Portal>
                 <PopoverContent
@@ -374,14 +477,7 @@ const NotificationBell = () => {
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            onClick={() => {
-                                                const unreadIds = notifications
-                                                    .filter(n => !n.is_viewed)
-                                                    .map(n => n.id);
-                                                if (unreadIds.length > 0) {
-                                                    handleMarkAsViewed(unreadIds);
-                                                }
-                                            }}
+                                            onClick={handleMarkAllAsRead}
                                         >
                                             Mark all as read
                                         </Button>

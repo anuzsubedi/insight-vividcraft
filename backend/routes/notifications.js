@@ -39,8 +39,63 @@ router.get('/', verifyToken, async (req, res) => {
 
         if (error) throw error;
 
+        // Get preview content for posts and comments
+        const enhancedNotifications = await Promise.all(notifications.map(async notification => {
+            let previewContent = notification.preview_content || '';
+            let postId = notification.post_id;
+            
+            // If no preview content exists in the notification already, fetch it
+            if (!previewContent || !postId) {
+                try {
+                    if (notification.target_type === 'post' && notification.target_id) {
+                        // For posts, get the title or first part of content
+                        const { data: post, error: postError } = await supabase
+                            .from('posts')
+                            .select('id, title, content')
+                            .eq('id', notification.target_id)
+                            .single();
+                            
+                        if (!postError && post) {
+                            // Set post_id if not already set
+                            if (!postId) {
+                                postId = post.id;
+                            }
+                            previewContent = post.title || (post.content ? post.content.substring(0, 100) : '');
+                        }
+                    } else if (notification.target_type === 'comment' && notification.target_id) {
+                        // For comments, get the content and associated post_id
+                        const { data: comment, error: commentError } = await supabase
+                            .from('comments')
+                            .select('content, post_id')
+                            .eq('id', notification.target_id)
+                            .single();
+                            
+                        if (!commentError && comment) {
+                            // Set post_id if not already set
+                            if (!postId && comment.post_id) {
+                                postId = comment.post_id;
+                            }
+                            
+                            if (comment.content) {
+                                previewContent = comment.content.substring(0, 100);
+                            }
+                        }
+                    }
+                } catch (previewError) {
+                    console.error('Error fetching preview content:', previewError);
+                }
+            }
+            
+            return {
+                ...notification,
+                preview_content: previewContent,
+                post_id: postId,
+                actors: notification.actors || []
+            };
+        }));
+
         // Transform the data to match the expected format
-        const processedNotifications = notifications.map(notification => ({
+        const processedNotifications = enhancedNotifications.map(notification => ({
             ...notification,
             actor: notification.actors?.[0]?.user || null // Take the first actor for now
         }));

@@ -1,3 +1,5 @@
+import useNotificationState from '../hooks/useNotificationState';
+
 class WebSocketService {
     constructor() {
         this.ws = null;
@@ -12,6 +14,16 @@ class WebSocketService {
         this.pendingReconnect = false;
         this.lastPong = Date.now();
         this.pingInterval = null;
+        this.notificationStore = null;
+
+        // Get notification store after initialization to avoid circular dependency
+        setTimeout(() => {
+            try {
+                this.notificationStore = useNotificationState.getState();
+            } catch (error) {
+                console.error('Error initializing notification store in websocket service:', error);
+            }
+        }, 0);
 
         // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
@@ -173,6 +185,36 @@ class WebSocketService {
         if (data.type === 'pong') {
             this.lastPong = Date.now();
             return;
+        }
+
+        // Update notification state directly if possible
+        if (this.notificationStore) {
+            if (data.type === 'unread_count') {
+                console.log('Setting unread count in store:', data.count);
+                this.notificationStore.setUnreadCount(data.count || 0);
+            } else if (data.type === 'new_notification') {
+                this.notificationStore.incrementUnreadCount();
+                
+                // Also add to notifications list if we've fetched notifications already
+                if (this.notificationStore.hasFetchedNotifications) {
+                    this.notificationStore.addNotification(data.notification);
+                }
+            } else if (data.type === 'notifications_list') {
+                this.notificationStore.setNotifications(data.notifications || []);
+            }
+        } else {
+            // If notification store isn't available yet, try to initialize it again
+            try {
+                this.notificationStore = useNotificationState.getState();
+                // Retry handling the message if we now have the store
+                if (this.notificationStore) {
+                    console.log('Notification store initialized, retrying message handling');
+                    this.handleMessage(data);
+                    return;
+                }
+            } catch (error) {
+                console.error('Failed to get notification store during message handling:', error);
+            }
         }
 
         const handler = this.handlers.get(data.type);

@@ -3,6 +3,21 @@ import { ENDPOINTS } from '../api/endpoints';
 import websocketService from './websocketService';
 
 export const notificationService = {
+    // Load initial unread count regardless of websocket connection
+    async loadInitialUnreadCount() {
+        try {
+            // Check if user is authenticated before making the request
+            const token = localStorage.getItem('token');
+            if (!token) return 0;
+            
+            const response = await api.get(ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
+            return response.data.count;
+        } catch (error) {
+            console.error('[LOAD INITIAL UNREAD COUNT] Error:', error);
+            return 0; // Return 0 if error to avoid UI issues
+        }
+    },
+
     async getNotifications(page = 1, limit = 50) {
         try {
             const response = await api.get(ENDPOINTS.NOTIFICATIONS.LIST, {
