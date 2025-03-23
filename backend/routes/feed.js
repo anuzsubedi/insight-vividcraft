@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase } from '../config/supabaseClient.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import redisClient from '../config/redisClient.js';
 
 const router = express.Router();
 
@@ -101,6 +102,15 @@ router.get('/following', authMiddleware, async (req, res) => {
         const limitNum = parseInt(limit);
         const offset = (pageNum - 1) * limitNum;
 
+        // Generate cache key based on request parameters
+        const cacheKey = `feed:following:${user.userId}:${pageNum}:${limitNum}:${sort}:${period}`;
+        
+        // Try to get data from cache
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+            return res.json(JSON.parse(cachedData));
+        }
+
         // Get following IDs first
         const { data: followingIds, error: followingError } = await supabase
             .from('follows')
@@ -114,7 +124,7 @@ router.get('/following', authMiddleware, async (req, res) => {
 
         // If not following anyone, return empty array
         if (!followingIds || followingIds.length === 0) {
-            return res.json({
+            const response = {
                 posts: [],
                 pagination: {
                     total: 0,
@@ -122,7 +132,11 @@ router.get('/following', authMiddleware, async (req, res) => {
                     limit: limitNum,
                     hasMore: false
                 }
+            };
+            await redisClient.set(cacheKey, JSON.stringify(response), {
+                EX: 300 // Cache for 5 minutes
             });
+            return res.json(response);
         }
 
         const userIds = followingIds.map(f => f.following_id);
@@ -199,7 +213,7 @@ router.get('/following', authMiddleware, async (req, res) => {
             });
         }
 
-        res.json({
+        const response = {
             posts: postsWithReactions,
             pagination: {
                 total: count,
@@ -207,7 +221,14 @@ router.get('/following', authMiddleware, async (req, res) => {
                 limit: limitNum,
                 hasMore: offset + posts.length < count
             }
+        };
+
+        // Cache the response
+        await redisClient.set(cacheKey, JSON.stringify(response), {
+            EX: 300 // Cache for 5 minutes
         });
+
+        res.json(response);
     } catch (error) {
         console.error('Feed error:', error);
         res.status(500).json({ error: error.message || 'Internal server error' });
