@@ -65,8 +65,8 @@ function Feed() {
     useEffect(() => {
         const loadCategories = async () => {
             try {
-                const data = await categoryService.getCategories();
-                setCategories(data);
+                const response = await categoryService.getCategories();
+                setCategories(response.categories || []); // Handle nested categories object
             } catch (error) {
                 console.error('Error loading categories:', error);
             }
@@ -271,23 +271,21 @@ function Feed() {
                         <option value="explore">Explore</option>
                     </ChakraSelect>
 
-                    {feedType !== 'explore' && (
-                        <ChakraSelect
-                            value={sortType}
-                            onChange={(e) => setSortType(e.target.value)}
-                            w="150px"
-                            border="2px solid black"
-                            borderRadius="0"
-                            _hover={{
-                                boxShadow: "4px 4px 0 0 #000",
-                            }}
-                        >
-                            <option value="recent">Recent</option>
-                            <option value="top">Top</option>
-                        </ChakraSelect>
-                    )}
+                    <ChakraSelect
+                        value={sortType}
+                        onChange={(e) => setSortType(e.target.value)}
+                        w="150px"
+                        border="2px solid black"
+                        borderRadius="0"
+                        _hover={{
+                            boxShadow: "4px 4px 0 0 #000",
+                        }}
+                    >
+                        <option value="recent">Recent</option>
+                        <option value="top">Top</option>
+                    </ChakraSelect>
 
-                    {sortType === 'top' && feedType !== 'explore' && (
+                    {sortType === 'top' && (
                         <ChakraSelect
                             value={sortPeriod}
                             onChange={(e) => setSortPeriod(e.target.value)}
@@ -313,6 +311,7 @@ function Feed() {
                                 bg="white"
                                 border="2px solid black"
                                 borderRadius="0"
+                                color="gray.800"
                                 _hover={{
                                     boxShadow: "4px 4px 0 0 #000",
                                 }}
