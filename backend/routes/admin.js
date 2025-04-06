@@ -319,13 +319,46 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
 
         // Handle content deletion/removal
         if (action === 'delete_post' && report.target_type === 'post') {
-            // Set removed_at timestamp for the post
+            // Get post details first to properly log the action
+            const { data: post } = await supabase
+                .from('posts')
+                .select('*')
+                .eq('id', report.target_id)
+                .single();
+
+            // Delete associated reactions first
+            await supabase
+                .from('post_reactions')
+                .delete()
+                .eq('post_id', report.target_id);
+                
+            // Get associated comments to delete their reactions
+            const { data: comments } = await supabase
+                .from('comments')
+                .select('id')
+                .eq('post_id', report.target_id);
+                
+            if (comments?.length > 0) {
+                const commentIds = comments.map(c => c.id);
+                
+                // Delete comment reactions
+                await supabase
+                    .from('comment_reactions')
+                    .delete()
+                    .in('comment_id', commentIds);
+                    
+                // Delete comments
+                await supabase
+                    .from('comments')
+                    .delete()
+                    .eq('post_id', report.target_id);
+            }
+            
+            // Actually delete the post completely
             await supabase
                 .from('posts')
-                .update({ 
-                    removed_at: new Date().toISOString() 
-                })
-                .eq('id', report.target_id);
+                .delete()
+                .eq('id', report.target_id);    
 
             // Log the moderation action
             await supabase
@@ -372,6 +405,9 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
                             .single()).data?.category
                     }
                 });
+        } else if (action === 'dismiss') {
+            // For dismiss action, we've already updated the report status to 'reviewed' above,
+            // and created an action record, so nothing more is needed here
         }
 
         res.json({ message: "Report reviewed successfully" });
