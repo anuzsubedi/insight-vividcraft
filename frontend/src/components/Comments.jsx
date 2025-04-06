@@ -11,7 +11,7 @@ import ReportModal from './ReportModal';
 import { mentionService } from '../services/mentionService';
 import MentionDropdown from './MentionDropdown';
 import { searchService } from "../services/searchService";
-import { Link } from 'react-router-dom';
+import MentionPill from './MentionPill';
 
 // Helper function to calculate net score
 const getNetScore = (upvotes = 0, downvotes = 0) => {
@@ -257,19 +257,15 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0, pr
                   {showDeletedContent ? 
                     (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') 
                     : processedComments[comment.id]?.map((segment, index) => (
-                      segment.type === 'mention' && segment.isValid ? (
-                        <Link
+                      segment.type === 'mention' ? (
+                        <MentionPill
                           key={index}
-                          to={`/user/${segment.content}`}
-                          color="blue.500"
-                          fontWeight="medium"
-                          _hover={{ textDecoration: 'underline' }}
-                        >
-                          @{segment.content}
-                        </Link>
+                          username={segment.content}
+                          isValid={segment.isValid}
+                        />
                       ) : (
                         <Text as="span" key={index}>
-                          {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+                          {segment.content}
                         </Text>
                       )
                   )) || comment.content}

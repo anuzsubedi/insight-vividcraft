@@ -30,6 +30,7 @@ import useAuthState from '../hooks/useAuthState';
 import { formatDistanceToNow } from 'date-fns';
 import { searchService } from "../services/searchService";
 import ReportModal from '../components/ReportModal';
+import MentionPill from '../components/MentionPill';
 
 // Helper function to get net score
 const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
@@ -179,6 +180,7 @@ function ViewPost() {
           isValid: userExists
         });
       } catch (error) {
+        console.error('Error checking user existence:', error);
         segments.push({
           type: 'mention',
           content: username,
@@ -271,7 +273,14 @@ function ViewPost() {
                   to={`/user/${post.author.username}`}
                   style={{ textDecoration: "none" }}
                 >
-                  <Text fontWeight="bold" color="gray.700">@{post.author.username}</Text>
+                  <Text 
+                    fontWeight="bold" 
+                    color="gray.700"
+                    _hover={{ color: "teal.500" }}
+                    transition="color 0.2s"
+                  >
+                    @{post.author.username}
+                  </Text>
                 </Link>
                 <Text fontSize="sm" color="gray.500">
                   {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
@@ -324,19 +333,15 @@ function ViewPost() {
             mb={6}
           >
             {processedText.map((segment, index) => (
-              segment.type === 'mention' && segment.isValid ? (
-                <Link
+              segment.type === 'mention' ? (
+                <MentionPill
                   key={index}
-                  to={`/user/${segment.content}`}
-                  color="blue.500"
-                  fontWeight="medium"
-                  _hover={{ textDecoration: 'underline' }}
-                >
-                  @{segment.content}
-                </Link>
+                  username={segment.content}
+                  isValid={segment.isValid}
+                />
               ) : (
                 <Text as="span" key={index}>
-                  {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+                  {segment.content}
                 </Text>
               )
             ))}
