@@ -284,15 +284,29 @@ router.put("/:id", verifyToken, canPost, async (req, res) => {
 // Delete post
 router.delete("/:id", verifyToken, async (req, res) => {
     try {
+        // First check if user is admin
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('is_admin')
+            .eq('id', req.user.userId)
+            .single();
+
+        if (userError) throw userError;
+
+        // Get the post
         const { data: post, error: fetchError } = await supabase
             .from('posts')
-            .select('id')
+            .select('id, author_id')
             .eq('id', req.params.id)
-            .eq('author_id', req.user.userId)
             .single();
 
         if (fetchError || !post) {
             return res.status(404).json({ error: "Post not found" });
+        }
+
+        // Check if user is either admin or post author
+        if (!user.is_admin && post.author_id !== req.user.userId) {
+            return res.status(403).json({ error: "Not authorized to delete this post" });
         }
 
         // Delete associated reactions first
