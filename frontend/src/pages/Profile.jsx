@@ -52,6 +52,7 @@ import useAuthState from "../hooks/useAuthState";
 import { useInView } from 'react-intersection-observer';
 import CreatePost from "../components/CreatePost";
 import Connection from "../components/Connection";
+import ReportModal from "../components/ReportModal";
 
 // Helper function to get net score
 const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
@@ -92,6 +93,10 @@ function Profile() {
     threshold: 0.1,
     rootMargin: '0px 0px 300px 0px' // Load more content earlier
   });
+
+  // Report modal state
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportPostId, setReportPostId] = useState({ id: '', type: 'post' });
 
   // Function to load posts with current filters
   const loadPosts = useCallback(async (pageNum = 1) => {
@@ -476,6 +481,12 @@ function Profile() {
         duration: '3000',
       });
     }
+  };
+
+  const handleReport = (e, postId) => {
+    e.stopPropagation();
+    setReportPostId({ id: postId, type: 'post' });
+    setIsReportModalOpen(true);
   };
 
   if (isLoading || !profile) {
@@ -906,7 +917,6 @@ function Profile() {
                 position="relative"
                 onClick={() => navigate(`/posts/${post.id}`, { state: { from: location.pathname } })}
               >
-                {/* ... post display content remains the same ... */}
                 {/* Top section with avatar, username, date, and menu */}
                 <HStack spacing={4} mb={4} position="relative">
                   <HStack flex={1}>
@@ -929,64 +939,44 @@ function Profile() {
                       </Text>
                     </VStack>
                   </HStack>
-                  {/* Move menu to top right and update icon */}
-                  {isOwnProfile && (
-                    <Menu isLazy>
-                      <MenuButton
-                        as={IconButton}
-                        icon={<FiMoreHorizontal />}
-                        variant="ghost"
-                        size="sm"
-                        position="absolute"
-                        top={2}
-                        right={2}
-                        aria-label="Post options"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Portal>
-                        <MenuList
-                          border="1px solid"
-                          borderColor="gray.200"
-                          onClick={(e) => e.stopPropagation()}
-                          bg="white"
-                          zIndex={1400}
-                        >
-                          <MenuItem 
-                            as={Link}
-                            to={`/posts/${post.id}/edit`}
-                            state={{ from: location.pathname }}
-                            icon={<EditIcon />}
-                          >
-                            Edit
+
+                  <Menu isLazy>
+                    <MenuButton
+                      as={IconButton}
+                      icon={<FiMoreHorizontal />}
+                      variant="ghost"
+                      size="sm"
+                      aria-label="More options"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Portal>
+                      <MenuList
+                        border="2px solid"
+                        borderColor="black"
+                        borderRadius="0"
+                        boxShadow="4px 4px 0 black"
+                        bg="white"
+                        zIndex={1400}
+                      >
+                        {!isOwnProfile && (
+                          <MenuItem onClick={(e) => handleReport(e, post.id)}>
+                            Report Post
                           </MenuItem>
-                          <MenuItem 
-                            icon={<ViewOffIcon />} 
-                            onClick={() => handleUnpublishPost(post.id)}
-                          >
-                            Move to Drafts
-                          </MenuItem>
-                          <MenuItem 
-                            icon={<DeleteIcon />} 
+                        )}
+                        {(isOwnProfile || user?.isAdmin) && (
+                          <MenuItem
                             color="red.500"
-                            onClick={() => handleDeletePost(post.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePost(post.id);
+                            }}
                           >
                             Delete Post
                           </MenuItem>
-                        </MenuList>
-                      </Portal>
-                    </Menu>
-                  )}
-                  <HStack spacing={2} ml="auto">
-                    {post.type === 'article' && post.category && (
-                      <Badge
-                        px={3}
-                        py={1}
-                        colorScheme="teal"
-                      >
-                        {post.category.name}
-                      </Badge>
-                    )}
-                  </HStack>
+                        )}
+                      </MenuList>
+                    </Portal>
+                  </Menu>
                 </HStack>
                 {/* Post content */}
                 <Box pl={14}> {/* Align content with username */}
@@ -1077,6 +1067,14 @@ function Profile() {
         onClose={() => setShowConnections(false)}
         username={username}
         initialTab={activeConnectionTab}
+      />
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setReportPostId({ id: '', type: 'post' });
+        }}
+        postId={reportPostId}
       />
     </Box>
   );

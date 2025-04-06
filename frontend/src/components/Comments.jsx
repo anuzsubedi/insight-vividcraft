@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text, VStack, HStack, Input, Button, Avatar, IconButton, useToast, Divider, Collapse, Menu, MenuButton, MenuList, MenuItem } from '@chakra-ui/react';
 import { FiMoreHorizontal, FiMessageCircle, FiEdit, FiTrash2, FiFlag } from 'react-icons/fi';
 import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
-import { ChevronDownIcon, ChevronRightIcon, WarningIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, ChevronRightIcon } from '@chakra-ui/icons';
 import { commentService } from '../services/commentService';
 import useAuthState from '../hooks/useAuthState';
 import PropTypes from 'prop-types';
@@ -19,13 +19,13 @@ const getNetScore = (upvotes = 0, downvotes = 0) => {
 };
 
 // Update the CommentThread props to include processedComments
-const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, level = 0, processedComments }) => {
+const CommentThread = ({ comment, user, onEdit, onDelete, onReply, level = 0, processedComments }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [reportTarget, setReportTarget] = useState(null); // Change variable name
+  const [reportTarget, setReportTarget] = useState(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const toast = useToast();
 
@@ -34,10 +34,9 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
   const hasReplies = comment.replies && comment.replies.length > 0;
   const hasValidReplies = comment.replies?.some(reply => !reply.deleted_at && !reply.removed_at);
   const showDeletedContent = (isDeleted || isRemoved) && hasValidReplies;
-  const isAdmin = user?.isAdmin;
   const isCommentOwner = user && String(user.userId) === String(comment.user_id);
 
-  // Don't render deleted comments without valid replies
+  // Don't render deleted/removed comments without valid replies
   if ((isDeleted || isRemoved) && !hasValidReplies) {
     return null;
   }
@@ -79,8 +78,10 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
     setIsEditing(false);
   };
 
-  const handleDelete = () => {
-    onDelete(comment.id);
+  const handleDelete = async () => {
+    if (comment.user_id === user?.userId || user?.isAdmin) {
+      onDelete(comment.id);
+    }
   };
 
   const handleReply = async () => {
@@ -182,21 +183,21 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
           
           <Avatar
             size="sm"
-            name={isRemoved ? "moderator" : comment.profiles.username}
-            src={isRemoved ? undefined : `/avatars/${comment.profiles.avatar_name}`}
+            name={comment.profiles.username}
+            src={`/avatars/${comment.profiles.avatar_name}`}
             border="2px solid"
             borderColor="gray.200"
           />
           <Box flex={1}>
             <HStack justify="space-between" mb={2}>
               <Text fontWeight="bold">
-                @{isRemoved ? "moderator" : comment.profiles.username}
+                @{comment.profiles.username}
               </Text>
               <HStack>
                 <Text fontSize="sm" color="gray.500">
                   {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                 </Text>
-                {!isDeleted && !isRemoved && user && (
+                {!isDeleted && user && (
                   <Menu>
                     <MenuButton
                       as={IconButton}
@@ -207,7 +208,7 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
                       aria-label="More options"
                     />
                     <MenuList>
-                      {isCommentOwner && (
+                      {isCommentOwner && !isDeleted && (
                         <>
                           <MenuItem icon={<FiEdit />} onClick={() => setIsEditing(!isEditing)}>
                             Edit
@@ -217,21 +218,18 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
                           </MenuItem>
                         </>
                       )}
-                      <MenuItem icon={<FiFlag />} onClick={handleReport}>
-                        Report
-                      </MenuItem>
+                      {!isCommentOwner && user?.isAdmin && !isDeleted && (
+                        <MenuItem icon={<FiTrash2 />} color="red.500" onClick={handleDelete}>
+                          Delete
+                        </MenuItem>
+                      )}
+                      {!isCommentOwner && !isDeleted && (
+                        <MenuItem icon={<FiFlag />} onClick={handleReport}>
+                          Report
+                        </MenuItem>
+                      )}
                     </MenuList>
                   </Menu>
-                )}
-                {!isDeleted && !isRemoved && isAdmin && (
-                  <IconButton
-                    icon={<WarningIcon />}
-                    variant="ghost"
-                    size="sm"
-                    colorScheme="red"
-                    aria-label="Remove comment"
-                    onClick={() => onRemove(comment.id)}
-                  />
                 )}
               </HStack>
             </HStack>
@@ -256,26 +254,28 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
             ) : (
               <>
                 <Text mb={2} whiteSpace="pre-wrap" color={showDeletedContent ? "gray.500" : "inherit"}>
-                  {showDeletedContent ? (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') : processedComments[comment.id]?.map((segment, index) => (
-                    segment.type === 'mention' && segment.isValid ? (
-                      <Link
-                        key={index}
-                        to={`/user/${segment.content}`}
-                        color="blue.500"
-                        fontWeight="medium"
-                        _hover={{ textDecoration: 'underline' }}
-                      >
-                        @{segment.content}
-                      </Link>
-                    ) : (
-                      <Text as="span" key={index}>
-                        {segment.type === 'mention' ? `@${segment.content}` : segment.content}
-                      </Text>
-                    )
+                  {showDeletedContent ? 
+                    (isRemoved ? '[Comment removed by moderator]' : '[Comment deleted by user]') 
+                    : processedComments[comment.id]?.map((segment, index) => (
+                      segment.type === 'mention' && segment.isValid ? (
+                        <Link
+                          key={index}
+                          to={`/user/${segment.content}`}
+                          color="blue.500"
+                          fontWeight="medium"
+                          _hover={{ textDecoration: 'underline' }}
+                        >
+                          @{segment.content}
+                        </Link>
+                      ) : (
+                        <Text as="span" key={index}>
+                          {segment.type === 'mention' ? `@${segment.content}` : segment.content}
+                        </Text>
+                      )
                   )) || comment.content}
                 </Text>
 
-                {!isDeleted && !isRemoved && (
+                {!isDeleted && (
                   <HStack spacing={3} mb={2}>
                     {/* Reactions */}
                     <HStack spacing={2}>
@@ -354,7 +354,6 @@ const CommentThread = ({ comment, user, onEdit, onDelete, onRemove, onReply, lev
                 user={user}
                 onEdit={onEdit}
                 onDelete={onDelete}
-                onRemove={onRemove}
                 onReply={onReply}
                 level={level + 1}
                 processedComments={processedComments}
@@ -399,7 +398,6 @@ CommentThread.propTypes = {
   user: PropTypes.object,
   onEdit: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
-  onRemove: PropTypes.func.isRequired,
   onReply: PropTypes.func.isRequired,
   level: PropTypes.number,
   processedComments: PropTypes.object
@@ -411,7 +409,6 @@ function Comments({ postId }) {
   const { user } = useAuthState();
   const toast = useToast();
   const [mentionUsers, setMentionUsers] = useState([]);
-  const [mentionQuery, setMentionQuery] = useState('');
   const inputRef = useRef(null);
   const [processedComments, setProcessedComments] = useState({});
 
@@ -607,10 +604,19 @@ function Comments({ postId }) {
         const updateDeletedStatus = comments => {
           return comments.map(comment => {
             if (comment.id === id) {
+              const isUserDeletion = comment.user_id === user?.userId;
               return {
                 ...comment,
-                deleted_at: new Date().toISOString(),
-                content: '[Comment deleted by user]'
+                [isUserDeletion ? 'deleted_at' : 'removed_at']: new Date().toISOString(),
+                content: isUserDeletion ? '[Comment deleted by user]' : '[Comment removed by moderator]',
+                // For admin removals, hide user info
+                ...(isUserDeletion ? {} : {
+                  profiles: {
+                    username: 'moderator',
+                    display_name: 'Moderator',
+                    avatar_name: null
+                  }
+                })
               };
             }
             if (comment.replies?.length > 0) {
@@ -626,7 +632,7 @@ function Comments({ postId }) {
       });
       
       toast({
-        title: 'Comment deleted',
+        title: user?.isAdmin ? 'Comment removed' : 'Comment deleted',
         status: 'success',
         duration: 2000,
       });
@@ -634,33 +640,6 @@ function Comments({ postId }) {
       console.error('Error deleting comment:', error);
       toast({
         title: 'Error deleting comment',
-        description: error.message,
-        status: 'error',
-        duration: 3000,
-      });
-    }
-  };
-
-  const handleRemove = async (id) => {
-    try {
-      await commentService.removeComment(id);
-      // Handle the removal in the UI
-      setComments(comments => {
-        const updatedComments = comments.map(comment => {
-          if (comment.id === id) {
-            return {
-              ...comment,
-              removed_at: new Date().toISOString()
-            };
-          }
-          return comment;
-        });
-        return organizeComments(updatedComments);
-      });
-    } catch (error) {
-      console.error('Error removing comment:', error);
-      toast({
-        title: 'Error removing comment',
         description: error.message,
         status: 'error',
         duration: 3000,
@@ -693,7 +672,6 @@ function Comments({ postId }) {
     const lastAtIndex = text.lastIndexOf('@');
     if (lastAtIndex >= 0 && text.slice(lastAtIndex + 1).indexOf(' ') === -1) {
       const query = text.slice(lastAtIndex + 1);
-      setMentionQuery(query);
       const users = await mentionService.searchUsers(query);
       setMentionUsers(users);
     } else {
@@ -734,7 +712,8 @@ function Comments({ postId }) {
           content: username,
           isValid: userExists
         });
-      } catch (error) {
+      } catch (err) {
+        console.error('Error checking mention validity:', err);
         segments.push({
           type: 'mention',
           content: username,
@@ -779,35 +758,6 @@ function Comments({ postId }) {
     processAllComments();
   }, [comments]);
 
-  // Modify the comment rendering part to use processed text
-  const renderComment = (comment) => (
-    <Box key={comment.id}>
-      // ...existing avatar and metadata...
-      
-      <Text fontSize="md" color="gray.700" mt={2}>
-        {processedComments[comment.id]?.map((segment, index) => (
-          segment.type === 'mention' && segment.isValid ? (
-            <Link
-              key={index}
-              to={`/user/${segment.content}`}
-              color="blue.500"
-              fontWeight="medium"
-              _hover={{ textDecoration: 'underline' }}
-            >
-              @{segment.content}
-            </Link>
-          ) : (
-            <Text as="span" key={index}>
-              {segment.type === 'mention' ? `@${segment.content}` : segment.content}
-            </Text>
-          )
-        )) || comment.body}
-      </Text>
-      
-      // ...existing comment actions...
-    </Box>
-  );
-
   return (
     <VStack align="stretch" spacing={4}>
       <Box as="form" onSubmit={handleSubmit} position="relative">
@@ -842,7 +792,6 @@ function Comments({ postId }) {
             user={user}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            onRemove={handleRemove}
             onReply={handleReply}
             processedComments={processedComments}
           />

@@ -70,11 +70,36 @@ async function getCommentReactionsWithUser(commentId, userId) {
     }
 }
 
-// Helper function to recursively mark comments as deleted
-const markCommentsAsDeleted = async (commentId, db) => {
+// Helper function to recursively mark comments as removed
+const markCommentsAsRemoved = async (commentId, userId, db) => {
     const now = new Date().toISOString();
     
-    // Get all replies recursively using a CTE (Common Table Expression)
+    // Get all replies recursively
+    const { data: replies } = await db.from('comments')
+        .select('id')
+        .eq('parent_id', commentId);
+
+    if (replies?.length > 0) {
+        // Recursively mark child comments as removed
+        for (const reply of replies) {
+            await markCommentsAsRemoved(reply.id, userId, db);
+        }
+    }
+
+    // Mark the current comment as removed
+    await db.from('comments')
+        .update({ 
+            removed_at: now,
+            removed_by: userId 
+        })
+        .eq('id', commentId);
+};
+
+// Helper function to recursively mark comments as deleted by user
+const markCommentsAsDeletedByUser = async (commentId, db) => {
+    const now = new Date().toISOString();
+    
+    // Get all replies recursively
     const { data: replies } = await db.from('comments')
         .select('id')
         .eq('parent_id', commentId);
@@ -82,7 +107,7 @@ const markCommentsAsDeleted = async (commentId, db) => {
     if (replies?.length > 0) {
         // Recursively mark child comments as deleted
         for (const reply of replies) {
-            await markCommentsAsDeleted(reply.id, db);
+            await markCommentsAsDeletedByUser(reply.id, db);
         }
     }
 
@@ -127,7 +152,6 @@ router.get('/post/:postId', optionalAuth, async (req, res) => {
                 return {
                     ...comment,
                     content: '[Comment deleted by user]'
-                    // Keep original profiles data
                 };
             }
             return comment;
@@ -333,32 +357,59 @@ router.put('/:id', verifyToken, canComment, async (req, res) => {
   }
 });
 
-// Delete a comment
+// Delete a comment (regular user deletion)
 router.delete('/:id', verifyToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.userId;
+  try {
+    const { id } = req.params;
+    const { user } = req;
 
-        // Verify the comment exists and belongs to the user
-        const { data: comment, error: commentError } = await supabase
-            .from('comments')
-            .select()
-            .eq('id', id)
-            .eq('user_id', userId)
-            .single();
+    // Get the comment
+    const { data: comment, error: commentError } = await supabase
+      .from('comments')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-        if (commentError || !comment) {
-            return res.status(404).json({ error: "Comment not found or unauthorized" });
-        }
-
-        // Mark this comment and all its replies as deleted
-        await markCommentsAsDeleted(id, supabase);
-
-        return res.status(200).json({ message: 'Comment deleted successfully' });
-    } catch (error) {
-        console.error('Delete comment error:', error);
-        return res.status(500).json({ error: 'Failed to delete comment' });
+    if (commentError) throw commentError;
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
     }
+
+    // Regular users can only delete their own comments
+    if (comment.user_id !== user.userId && !user.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to delete this comment' });
+    }
+
+    // If it's a user deleting their own comment
+    if (comment.user_id === user.userId) {
+      await markCommentsAsDeletedByUser(id, supabase);
+      return res.json({ message: 'Comment deleted successfully' });
+    }
+
+    // If we get here, it's an admin, so use removed_at instead
+    await supabase
+      .from('comments')
+      .update({ removed_at: new Date().toISOString() })
+      .eq('id', id);
+
+    // Log moderation action for admin deletion
+    await supabase
+      .from('content_moderation')
+      .insert({
+        target_id: id,
+        target_type: 'comment',
+        action_type: 'delete',
+        admin_id: user.userId,
+        details: {
+          reason: 'Admin removed comment'
+        }
+      });
+
+    res.json({ message: 'Comment removed successfully' });
+  } catch (error) {
+    console.error('Error with comment deletion:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Admin remove comment

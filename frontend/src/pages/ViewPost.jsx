@@ -14,15 +14,22 @@ import {
   IconButton,
   Center,
   Avatar,
-  Divider
+  Divider,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Portal,
 } from "@chakra-ui/react";
 import { ChevronLeftIcon } from "@chakra-ui/icons";
 import { BiUpvote, BiDownvote, BiSolidUpvote, BiSolidDownvote } from "react-icons/bi";
+import { FiMoreHorizontal } from "react-icons/fi";
 import { postService } from "../services/postService";
 import Comments from '../components/Comments';
 import useAuthState from '../hooks/useAuthState';
 import { formatDistanceToNow } from 'date-fns';
-import { searchService } from "../services/searchService"; // Add this import
+import { searchService } from "../services/searchService";
+import ReportModal from '../components/ReportModal';
 
 // Helper function to get net score
 const getNetScore = (upvotes = 0, downvotes = 0) => upvotes - downvotes;
@@ -37,6 +44,7 @@ function ViewPost() {
   const toast = useToast();
   const [isReactionAnimating, setIsReactionAnimating] = useState(false);
   const [processedText, setProcessedText] = useState([]);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   useEffect(() => {
     const loadPost = async () => {
@@ -144,7 +152,6 @@ function ViewPost() {
     }
   };
 
-  // Add this new function to process mentions
   const processMentions = async (text) => {
     const segments = [];
     let lastIndex = 0;
@@ -193,12 +200,34 @@ function ViewPost() {
     return segments;
   };
 
-  // Add this effect to process mentions when post loads
   useEffect(() => {
     if (post?.body) {
       processMentions(post.body).then(setProcessedText);
     }
   }, [post?.body]);
+
+  const handleDelete = async () => {
+    try {
+      await postService.deletePost(id);
+      toast({
+        title: "Post deleted",
+        status: "success",
+        duration: 3000,
+      });
+      navigate("/");
+    } catch (error) {
+      toast({
+        title: "Error deleting post",
+        description: error.message,
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleReport = () => {
+    setIsReportModalOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -228,25 +257,58 @@ function ViewPost() {
       <Box bg="white" rounded="lg" overflow="hidden" shadow="lg">
         {/* Author info and metadata */}
         <Box px={8} pt={6} pb={3}>
-          <HStack spacing={4} mb={6}>
-            <Avatar
-              size="md"
-              name={post.author.username}
-              src={`/avatars/${post.author.avatar_name}`}
-              border="2px solid"
-              borderColor="gray.200"
-            />
-            <VStack align="start" spacing={0}>
-              <Link
-                to={`/user/${post.author.username}`}
-                style={{ textDecoration: "none" }}
-              >
-                <Text fontWeight="bold" color="gray.700">@{post.author.username}</Text>
-              </Link>
-              <Text fontSize="sm" color="gray.500">
-                {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
-              </Text>
-            </VStack>
+          <HStack justify="space-between" mb={6}>
+            <HStack spacing={4}>
+              <Avatar
+                size="md"
+                name={post.author.username}
+                src={`/avatars/${post.author.avatar_name}`}
+                border="2px solid"
+                borderColor="gray.200"
+              />
+              <VStack align="start" spacing={0}>
+                <Link
+                  to={`/user/${post.author.username}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <Text fontWeight="bold" color="gray.700">@{post.author.username}</Text>
+                </Link>
+                <Text fontSize="sm" color="gray.500">
+                  {formatDistanceToNow(new Date(post.published_at), { addSuffix: true })}
+                </Text>
+              </VStack>
+            </HStack>
+            <Menu isLazy>
+              <MenuButton
+                as={IconButton}
+                icon={<FiMoreHorizontal />}
+                variant="ghost"
+                size="sm"
+                aria-label="More options"
+              />
+              <Portal>
+                <MenuList
+                  border="2px solid"
+                  borderColor="black"
+                  borderRadius="0"
+                  boxShadow="4px 4px 0 black"
+                  bg="white"
+                  zIndex={1400}
+                >
+                  <MenuItem onClick={handleReport}>
+                    Report Post
+                  </MenuItem>
+                  {user?.isAdmin && (
+                    <MenuItem
+                      color="red.500"
+                      onClick={handleDelete}
+                    >
+                      Delete Post
+                    </MenuItem>
+                  )}
+                </MenuList>
+              </Portal>
+            </Menu>
           </HStack>
 
           {/* Title for articles */}
@@ -369,6 +431,11 @@ function ViewPost() {
           </Box>
         </Box>
       </Box>
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        postId={{ id, type: 'post' }}
+      />
     </Container>
   );
 }
