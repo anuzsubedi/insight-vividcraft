@@ -65,6 +65,12 @@ function Feed() {
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [processedPosts, setProcessedPosts] = useState({});
+    
+    // Helper function to truncate text
+    const truncateText = (text, maxLength = 300) => {
+        if (text.length <= maxLength) return text;
+        return text.slice(0, maxLength) + '...';
+    };
 
     // Load categories on mount
     useEffect(() => {
@@ -538,11 +544,11 @@ function Feed() {
                                                 />
                                             ) : (
                                                 <Text as="span" key={index}>
-                                                    {segment.content}
+                                                    {truncateText(segment.content)}
                                                 </Text>
                                             )
                                         ))
-                                        : post.body
+                                        : truncateText(post.body)
                                     }
                                 </Text>
                             </Box>
