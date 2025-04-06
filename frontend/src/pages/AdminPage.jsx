@@ -19,10 +19,6 @@ import {
   Tab,
   TabPanel,
   Select,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Table,
   Thead,
   Tbody,
@@ -31,16 +27,16 @@ import {
   Td,
   Tooltip,
   VStack,
+  IconButton,
 } from "@chakra-ui/react";
-import { SearchIcon, ChevronDownIcon, ViewIcon } from "@chakra-ui/icons";
+import { SearchIcon } from "@chakra-ui/icons";
+import { Hammer } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import useAuthState from "../hooks/useAuthState";
 import { adminService } from "../services/adminService";
 import Header from "../components/Header";
 import ActionModal from '../components/ActionModal';
 import ContentViewModal from '../components/ContentViewModal';
-
-const CONTENT_TRUNCATE_LENGTH = 100; // Characters to show before truncating
 
 const AdminPage = () => {
   const { user } = useAuthState();
@@ -210,11 +206,6 @@ const AdminPage = () => {
         duration: 3000,
       });
     }
-  };
-
-  const truncateText = (text, length = CONTENT_TRUNCATE_LENGTH) => {
-    if (!text) return '';
-    return text.length > length ? `${text.substring(0, length)}...` : text;
   };
 
   const handleViewContent = (report) => {
@@ -534,19 +525,37 @@ const AdminPage = () => {
                             {report.status}
                           </Badge>
                         </Td>
-                        <Td>
-                          <Button
-                            size="sm"
-                            colorScheme="blue"
-                            isDisabled={report.status !== "pending"}
-                            onClick={() => {
-                              setSelectedReport(report);
-                              setIsActionModalOpen(true);
-                            }}
-                            width="full"
-                          >
-                            Take Action
-                          </Button>
+                        <Td textAlign="center">
+                          <Tooltip label="Take Action" hasArrow>
+                            <IconButton
+                              aria-label="Take action"
+                              icon={<Hammer />}
+                              size="sm"
+                              colorScheme="blue"
+                              isDisabled={report.status !== "pending"}
+                              onClick={() => {
+                                setSelectedReport(report);
+                                setIsActionModalOpen(true);
+                              }}
+                              borderWidth="2px"
+                              borderColor="black"
+                              boxShadow="2px 2px 0 black"
+                              _hover={{
+                                transform: 'translate(-1px, -1px)',
+                                boxShadow: '3px 3px 0 black'
+                              }}
+                              _active={{
+                                transform: 'translate(0, 0)',
+                                boxShadow: '1px 1px 0 black'
+                              }}
+                              _disabled={{
+                                opacity: 0.6,
+                                cursor: 'not-allowed',
+                                boxShadow: 'none',
+                                transform: 'none'
+                              }}
+                            />
+                          </Tooltip>
                         </Td>
                       </Tr>
                     ))}
