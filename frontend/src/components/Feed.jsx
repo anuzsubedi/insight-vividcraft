@@ -12,14 +12,16 @@ import {
     Menu,
     MenuButton,
     MenuList,
+    MenuItem,
     MenuItemOption,
     MenuOptionGroup,
     useToast,
     Avatar,
     IconButton,
+    Portal,
 } from '@chakra-ui/react';
 import { BiUpvote, BiDownvote, BiComment, BiSolidUpvote, BiSolidDownvote } from 'react-icons/bi';
-import { FaBan } from 'react-icons/fa'; // Add this import
+import { FiMoreHorizontal } from 'react-icons/fi';
 import { feedService } from '../services/feedService';
 import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
@@ -248,6 +250,26 @@ function Feed() {
         }
     };
 
+    const handleDelete = async (e, postId) => {
+        e.stopPropagation();
+        try {
+            await postService.deletePost(postId);
+            setPosts(prev => prev.filter(p => p.id !== postId));
+            toast({
+                title: "Post deleted",
+                status: "success",
+                duration: 3000,
+            });
+        } catch (error) {
+            toast({
+                title: "Error deleting post",
+                description: error.message,
+                status: "error",
+                duration: 3000,
+            });
+        }
+    };
+
     return (
         <VStack spacing={6} align="stretch">
             {/* Create Post Form */}
@@ -457,17 +479,41 @@ function Feed() {
                                 <BiComment size={20} />
                                 <Text>{post.comment_count || 0}</Text>
                             </HStack>
-                            <HStack spacing={2}>
-                                <IconButton
-                                    icon={<FaBan />}
+                            <Menu isLazy>
+                                <MenuButton
+                                    as={IconButton}
+                                    icon={<FiMoreHorizontal />}
                                     variant="ghost"
                                     size="sm"
-                                    color="gray.500"
-                                    aria-label="Forbid"
-                                    onClick={(e) => handleReport(e, post.id)}
-                                    _hover={{ color: "red.500", bg: "red.50" }}
+                                    aria-label="More options"
+                                    onClick={(e) => e.stopPropagation()}
                                 />
-                            </HStack>
+                                <Portal>
+                                    <MenuList
+                                        border="2px solid"
+                                        borderColor="black"
+                                        borderRadius="0"
+                                        boxShadow="4px 4px 0 black"
+                                        onClick={(e) => e.stopPropagation()}
+                                        bg="white"
+                                        zIndex={1400}
+                                    >
+                                        <MenuItem
+                                            onClick={(e) => handleReport(e, post.id)}
+                                        >
+                                            Report Post
+                                        </MenuItem>
+                                        {user?.isAdmin && (
+                                            <MenuItem
+                                                color="red.500"
+                                                onClick={(e) => handleDelete(e, post.id)}
+                                            >
+                                                Delete Post
+                                            </MenuItem>
+                                        )}
+                                    </MenuList>
+                                </Portal>
+                            </Menu>
                         </HStack>
                     </Box>
                 ))}
