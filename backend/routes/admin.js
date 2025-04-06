@@ -201,10 +201,12 @@ router.get("/reports", verifyToken, isAdmin, async (req, res) => {
             .select(`
                 id,
                 title,
-                content,
+                body,
                 author:users (
+                    id,
                     username,
-                    display_name
+                    display_name,
+                    avatar_name
                 )
             `)
             .in('id', postReports.map(r => parseInt(r.target_id)))
@@ -216,9 +218,12 @@ router.get("/reports", verifyToken, isAdmin, async (req, res) => {
             .select(`
                 id,
                 content,
+                user_id,
                 author:users (
+                    id,
                     username,
-                    display_name
+                    display_name,
+                    avatar_name
                 )
             `)
             .in('id', commentReports.map(r => r.target_id))
@@ -243,7 +248,8 @@ router.get("/reports", verifyToken, isAdmin, async (req, res) => {
             
             return {
                 ...report,
-                content: targetContent?.content,
+                content: report.target_type === 'post' ? targetContent?.body : targetContent?.content,
+                title: report.target_type === 'post' ? targetContent?.title : null,
                 contentAuthor: targetContent?.author
             };
         });
@@ -319,13 +325,46 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
 
         // Handle content deletion/removal
         if (action === 'delete_post' && report.target_type === 'post') {
-            // Set removed_at timestamp for the post
+            // Get post details first to properly log the action
+            const { data: post } = await supabase
+                .from('posts')
+                .select('*')
+                .eq('id', report.target_id)
+                .single();
+
+            // Delete associated reactions first
+            await supabase
+                .from('post_reactions')
+                .delete()
+                .eq('post_id', report.target_id);
+                
+            // Get associated comments to delete their reactions
+            const { data: comments } = await supabase
+                .from('comments')
+                .select('id')
+                .eq('post_id', report.target_id);
+                
+            if (comments?.length > 0) {
+                const commentIds = comments.map(c => c.id);
+                
+                // Delete comment reactions
+                await supabase
+                    .from('comment_reactions')
+                    .delete()
+                    .in('comment_id', commentIds);
+                    
+                // Delete comments
+                await supabase
+                    .from('comments')
+                    .delete()
+                    .eq('post_id', report.target_id);
+            }
+            
+            // Actually delete the post completely
             await supabase
                 .from('posts')
-                .update({ 
-                    removed_at: new Date().toISOString() 
-                })
-                .eq('id', report.target_id);
+                .delete()
+                .eq('id', report.target_id);    
 
             // Log the moderation action
             await supabase
@@ -372,12 +411,20 @@ router.post("/reports/:reportId/review", verifyToken, isAdmin, async (req, res) 
                             .single()).data?.category
                     }
                 });
+        } else if (action === 'dismiss') {
+            // For dismiss action, we only need to update the report status
+            // We've already updated the report status to 'reviewed' above
+            // and created an action record, so we're done here
         }
 
         res.json({ message: "Report reviewed successfully" });
     } catch (error) {
         console.error("Review report error:", error);
-        res.status(500).json({ error: "Failed to review report" });
+        // Send a more specific error message to help with debugging
+        res.status(500).json({ 
+            error: "Failed to review report",
+            details: error.message 
+        });
     }
 });
 

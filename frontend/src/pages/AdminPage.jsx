@@ -19,22 +19,24 @@ import {
   Tab,
   TabPanel,
   Select,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
   Table,
   Thead,
   Tbody,
   Tr,
   Th,
   Td,
+  Tooltip,
+  VStack,
+  IconButton,
 } from "@chakra-ui/react";
-import { SearchIcon, ChevronDownIcon } from "@chakra-ui/icons";
+import { SearchIcon } from "@chakra-ui/icons";
+import { Hammer } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import useAuthState from "../hooks/useAuthState";
 import { adminService } from "../services/adminService";
 import Header from "../components/Header";
 import ActionModal from '../components/ActionModal';
+import ContentViewModal from '../components/ContentViewModal';
 
 const AdminPage = () => {
   const { user } = useAuthState();
@@ -49,6 +51,8 @@ const AdminPage = () => {
   });
   const [selectedReport, setSelectedReport] = useState(null);
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [isContentModalOpen, setIsContentModalOpen] = useState(false);
+  const [selectedContent, setSelectedContent] = useState(null);
   const toast = useToast();
 
   const fetchAdmins = useCallback(async () => {
@@ -202,6 +206,17 @@ const AdminPage = () => {
         duration: 3000,
       });
     }
+  };
+
+  const handleViewContent = (report) => {
+    setSelectedContent({
+      id: report.target_id,
+      type: report.target_type,
+      title: report.title || null,
+      body: report.content || 'No content available',
+      author: report.contentAuthor
+    });
+    setIsContentModalOpen(true);
   };
 
   return (
@@ -409,42 +424,91 @@ const AdminPage = () => {
                   </Select>
                 </HStack>
 
-                <Table variant="simple">
+                <Table variant="simple" layout="fixed">
                   <Thead>
                     <Tr>
-                      <Th>Reported Item</Th>
-                      <Th>Category</Th>
-                      <Th>Reporter</Th>
-                      <Th>Date</Th>
-                      <Th>Status</Th>
-                      <Th>Action</Th>
+                      <Th width="40%">Reported Content</Th>
+                      <Th width="15%">Category</Th>
+                      <Th width="15%">Reporter</Th>
+                      <Th width="15%">Date</Th>
+                      <Th width="15%">Status</Th>
+                      <Th width="100px">Action</Th>
                     </Tr>
                   </Thead>
                   <Tbody>
                     {reports.map((report) => (
                       <Tr key={report.id}>
+                        <Td maxWidth="400px">
+                          <VStack align="start" spacing={2} width="100%">
+                            <HStack width="100%" justify="space-between">
+                              <Badge 
+                                colorScheme={report.target_type === "post" ? "blue" : "purple"}
+                                px={2}
+                                py={1}
+                                borderRadius="full"
+                              >
+                                {report.target_type === "post" ? "Post" : "Comment"}
+                              </Badge>
+                              <Text fontSize="xs" color="gray.400">
+                                ID: {report.target_id}
+                              </Text>
+                            </HStack>
+                            
+                            <Box 
+                              cursor="pointer" 
+                              width="100%"
+                              p={3}
+                              bg="gray.50"
+                              borderRadius="md"
+                              borderWidth="1px"
+                              borderColor="gray.200"
+                              _hover={{ 
+                                bg: "gray.100",
+                                borderColor: "blue.200"
+                              }}
+                              onClick={() => handleViewContent(report)}
+                            >
+                              {report.contentAuthor && (
+                                <HStack mb={2} spacing={1}>
+                                  <Text fontSize="sm" color="gray.500">by</Text>
+                                  <Text fontSize="sm">@{report.contentAuthor.username}</Text>
+                                  {report.contentAuthor.display_name && (
+                                    <Text fontSize="sm" color="gray.500">({report.contentAuthor.display_name})</Text>
+                                  )}  
+                                </HStack>
+                              )}
+                              <Text fontSize="sm" color="gray.800" noOfLines={3}>
+                                {report.title ? (
+                                  <Text as="span" fontWeight="bold">{report.title}<br/></Text>
+                                ) : null}
+                                {report.content || 'No content available'}
+                              </Text>
+                            </Box>
+                          </VStack>
+                        </Td>
                         <Td>
-                          <Text>
-                            {report.target_type === "post" ? "Post" : "Comment"} ID:{" "}
-                            {report.target_id}
+                          <Badge
+                            colorScheme={
+                              report.category === 'Spam' ? 'orange' :
+                              report.category === 'Violence and Sex' ? 'red' :
+                              report.category === 'Promotes Bullying' ? 'purple' :
+                              'gray'
+                            }
+                            px={2}
+                            py={1}
+                            borderRadius="full"
+                          >
+                            {report.category}
+                          </Badge>
+                        </Td>
+                        <Td>
+                          <Text fontSize="sm" fontWeight="medium">
+                            @{report.reporter?.username || report.user?.username}
                           </Text>
                         </Td>
-                        <Td>{report.category}</Td>
-                        <Td>
-                          <HStack>
-                            <Avatar
-                              size="sm"
-                              name={report.reporter_name}
-                              src={
-                                report.reporter_avatar
-                                  ? `/avatars/${report.reporter_avatar}`
-                                  : undefined
-                              }
-                            />
-                            <Text>{report.reporter_name}</Text>
-                          </HStack>
+                        <Td whiteSpace="nowrap">
+                          {formatDistanceToNow(new Date(report.created_at))} ago
                         </Td>
-                        <Td>{new Date(report.created_at).toLocaleDateString()}</Td>
                         <Td>
                           <Badge
                             colorScheme={
@@ -454,41 +518,44 @@ const AdminPage = () => {
                                 ? "green"
                                 : "gray"
                             }
+                            px={2}
+                            py={1}
+                            borderRadius="full"
                           >
                             {report.status}
                           </Badge>
                         </Td>
-                        <Td>
-                          <Menu>
-                            <MenuButton
-                              as={Button}
-                              rightIcon={<ChevronDownIcon />}
+                        <Td textAlign="center">
+                          <Tooltip label="Take Action" hasArrow>
+                            <IconButton
+                              aria-label="Take action"
+                              icon={<Hammer />}
                               size="sm"
+                              colorScheme="blue"
                               isDisabled={report.status !== "pending"}
-                            >
-                              Take Action
-                            </MenuButton>
-                            <MenuList>
-                              <MenuItem
-                                onClick={() => {
-                                  setSelectedReport(report);
-                                  setIsActionModalOpen(true);
-                                }}
-                              >
-                                Review & Take Action
-                              </MenuItem>
-                              <MenuItem
-                                onClick={() =>
-                                  handleReportAction({
-                                    type: "dismiss",
-                                    details: { reason: "No action needed" },
-                                  })
-                                }
-                              >
-                                Dismiss Report
-                              </MenuItem>
-                            </MenuList>
-                          </Menu>
+                              onClick={() => {
+                                setSelectedReport(report);
+                                setIsActionModalOpen(true);
+                              }}
+                              borderWidth="2px"
+                              borderColor="black"
+                              boxShadow="2px 2px 0 black"
+                              _hover={{
+                                transform: 'translate(-1px, -1px)',
+                                boxShadow: '3px 3px 0 black'
+                              }}
+                              _active={{
+                                transform: 'translate(0, 0)',
+                                boxShadow: '1px 1px 0 black'
+                              }}
+                              _disabled={{
+                                opacity: 0.6,
+                                cursor: 'not-allowed',
+                                boxShadow: 'none',
+                                transform: 'none'
+                              }}
+                            />
+                          </Tooltip>
                         </Td>
                       </Tr>
                     ))}
@@ -500,7 +567,7 @@ const AdminPage = () => {
         </Tabs>
       </Container>
 
-      {/* Replace the old action modal with the new ActionModal component */}
+      {/* Action modal for taking moderation actions */}
       <ActionModal
         isOpen={isActionModalOpen}
         onClose={() => {
@@ -509,6 +576,16 @@ const AdminPage = () => {
         }}
         onConfirm={handleReportAction}
         report={selectedReport}
+      />
+
+      {/* Content view modal for displaying full reported content */}
+      <ContentViewModal
+        isOpen={isContentModalOpen}
+        onClose={() => {
+          setIsContentModalOpen(false);
+          setSelectedContent(null);
+        }}
+        content={selectedContent}
       />
     </Box>
   );
