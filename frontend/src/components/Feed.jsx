@@ -27,10 +27,12 @@ import { postService } from '../services/postService';
 import categoryService from '../services/categoryService';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import CreatePost from './CreatePost';
 import useAuthState from '../hooks/useAuthState';
 import ReportModal from './ReportModal';
+import { searchService } from '../services/searchService';
+import MentionPill from './MentionPill';
 
 // Helper function to format date
 const formatPostDate = (date) => {
@@ -62,6 +64,7 @@ function Feed() {
     const [reportPostId, setReportPostId] = useState({ id: '', type: 'post' });
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [processedPosts, setProcessedPosts] = useState({});
 
     // Load categories on mount
     useEffect(() => {
@@ -75,6 +78,75 @@ function Feed() {
         };
         loadCategories();
     }, []);
+
+    // Process mentions in post content
+    const processMentions = async (text) => {
+        const segments = [];
+        let lastIndex = 0;
+        const mentionRegex = /@(\w+)/g;
+        let match;
+
+        while ((match = mentionRegex.exec(text)) !== null) {
+            // Add text before the mention
+            if (match.index > lastIndex) {
+                segments.push({
+                    type: 'text',
+                    content: text.slice(lastIndex, match.index)
+                });
+            }
+
+            // Process the mention
+            const username = match[1];
+            try {
+                const response = await searchService.searchUsers(username);
+                const userExists = response.users.some(user => user.username === username);
+                
+                segments.push({
+                    type: 'mention',
+                    content: username,
+                    isValid: userExists
+                });
+            } catch (err) {
+                console.error('Error checking user existence:', err);
+                segments.push({
+                    type: 'mention',
+                    content: username,
+                    isValid: false
+                });
+            }
+
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Add remaining text
+        if (lastIndex < text.length) {
+            segments.push({
+                type: 'text',
+                content: text.slice(lastIndex)
+            });
+        }
+
+        return segments;
+    };
+
+    // Process all posts when they change
+    useEffect(() => {
+        const processAllPosts = async () => {
+            const processed = {};
+            
+            for (const post of posts) {
+                if (post.body) {
+                    processed[post.id] = await processMentions(post.body);
+                }
+            }
+            
+            setProcessedPosts(processed);
+        };
+
+        if (posts.length > 0) {
+            processAllPosts();
+        }
+    }, [posts]);
 
     // Load posts
     const loadPosts = useCallback(async (pageNum = 1) => {
@@ -404,7 +476,19 @@ function Feed() {
                                     border="2px solid black"
                                 />
                                 <VStack align="start" spacing={0}>
-                                    <Text fontWeight="bold">@{post.author.username}</Text>
+                                    <Link 
+                                        to={`/user/${post.author.username}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{ textDecoration: 'none' }}
+                                    >
+                                        <Text 
+                                            fontWeight="bold"
+                                            _hover={{ color: "teal.500" }}
+                                            transition="color 0.2s"
+                                        >
+                                            @{post.author.username}
+                                        </Text>
+                                    </Link>
                                     <Text fontSize="sm" color="gray.600">
                                         {formatPostDate(post.published_at)}
                                     </Text>
@@ -444,7 +528,22 @@ function Feed() {
                                     color="gray.700"
                                     whiteSpace="pre-wrap"
                                 >
-                                    {post.body}
+                                    {processedPosts[post.id] 
+                                        ? processedPosts[post.id].map((segment, index) => (
+                                            segment.type === 'mention' ? (
+                                                <MentionPill
+                                                    key={index}
+                                                    username={segment.content}
+                                                    isValid={segment.isValid}
+                                                />
+                                            ) : (
+                                                <Text as="span" key={index}>
+                                                    {segment.content}
+                                                </Text>
+                                            )
+                                        ))
+                                        : post.body
+                                    }
                                 </Text>
                             </Box>
                         </Box>
