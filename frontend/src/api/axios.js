@@ -1,5 +1,6 @@
 import axios from 'axios';
 import useAuthState from '../hooks/useAuthState';
+import { ENDPOINTS } from './endpoints';
 
 const api = axios.create({
     baseURL: 'http://localhost:5000/api',
@@ -100,13 +101,15 @@ api.interceptors.response.use(
 
         // If the error is 401 and we haven't tried to refresh yet
         if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
+            // Don't logout for password update errors
+            if (originalRequest.url === ENDPOINTS.AUTH.UPDATE_PASSWORD) {
+                return Promise.reject(error);
+            }
 
+            originalRequest._retry = true;
             // Clear auth state
             const logout = useAuthState.getState().logout;
             logout();
-            // Don't use window.location, let React Router handle navigation
-            // The AuthProvider will handle redirecting to login
         }
 
         return Promise.reject(error);
