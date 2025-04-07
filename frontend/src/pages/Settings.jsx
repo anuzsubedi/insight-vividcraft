@@ -201,7 +201,7 @@ function Settings() {
     } catch (error) {
       toast({
         title: "Error updating password",
-        description: error.message,
+        description: error.response?.data?.error || "Failed to update password",
         status: "error",
         duration: 3000,
       });

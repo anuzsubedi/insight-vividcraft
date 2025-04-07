@@ -28,6 +28,41 @@ async function generateUniqueSlug(title) {
     return slug;
 }
 
+// Helper function to get post data with active comment count
+async function getPostWithDetails(post, currentUserId) {
+    const upvotes = post.reactions?.filter(r => r.reaction_type === 'upvote').length || 0;
+    const downvotes = post.reactions?.filter(r => r.reaction_type === 'downvote').length || 0;
+    const userReaction = post.reactions?.find(r => r.user_id === currentUserId)?.reaction_type || null;
+    
+    // Get active comment count using the new function
+    const { data: commentCount, error: countError } = await supabase
+        .rpc('get_active_comment_count', { p_post_id: post.id });
+    
+    if (countError) {
+        console.error('Error getting active comment count:', countError);
+    }
+    
+    // Remove the reactions array and comments from the response
+    const { reactions, comments, ...postWithoutReactions } = post;
+    
+    return {
+        ...postWithoutReactions,
+        reactions: {
+            upvotes,
+            downvotes
+        },
+        userReaction,
+        comment_count: commentCount || 0,
+        // Add score for sorting
+        score: upvotes - downvotes
+    };
+}
+
+// Update existing functions to use the new helper
+async function processPostsWithDetails(posts, currentUserId) {
+    return Promise.all(posts.map(post => getPostWithDetails(post, currentUserId)));
+}
+
 // Create post (requires post permission)
 router.post("/", verifyToken, canPost, async (req, res) => {
     try {
@@ -652,32 +687,7 @@ router.get("/user/:username", verifyToken, async (req, res) => {
     }
     
     // Process posts to include reactions
-    const processedPosts = posts.map(post => {
-      // Calculate reaction counts
-      const upvotes = post.reactions.filter(r => r.reaction_type === 'upvote').length;
-      const downvotes = post.reactions.filter(r => r.reaction_type === 'downvote').length;
-      
-      // Get user's reaction
-      const userReaction = post.reactions.find(r => r.user_id === currentUserId)?.reaction_type || null;
-      
-      // Get comment count
-      const comment_count = post.comments?.length ? post.comments[0].count : 0;
-      
-      // Remove the reactions array and comments from the response
-      const { reactions, comments, ...postWithoutReactions } = post;
-      
-      return {
-        ...postWithoutReactions,
-        reactions: {
-          upvotes,
-          downvotes
-        },
-        userReaction,
-        comment_count,
-        // Add score for sorting
-        score: upvotes - downvotes
-      };
-    });
+    const processedPosts = await processPostsWithDetails(posts, currentUserId);
     
     // Apply top sorting in memory if needed
     if (sortBy === 'top') {

@@ -34,28 +34,45 @@ async function getPostReactions(postId, userId) {
     };
 }
 
-// Helper function to add reactions to posts
-async function addReactionsToPosts(posts, userId) {
+// Helper function to add post details including active comment count
+async function addPostDetails(posts, userId) {
     return Promise.all(posts.map(async (post) => {
-        try {
-            const reactions = await getPostReactions(post.id, userId);
+        // Get reactions
+        const reactions = await getPostReactions(post.id, userId);
+        
+        // Get active comment count
+        const { data: commentCount, error: commentError } = await supabase
+            .rpc('get_active_comment_count', { p_post_id: post.id });
+            
+        if (commentError) {
+            console.error('Error getting comment count:', commentError);
             return {
                 ...post,
                 reactions: {
                     upvotes: reactions.upvotes,
                     downvotes: reactions.downvotes
                 },
-                userReaction: reactions.userReaction
-            };
-        } catch (error) {
-            console.error('Error getting reactions for post:', post.id, error);
-            return {
-                ...post,
-                reactions: { upvotes: 0, downvotes: 0 },
-                userReaction: null
+                userReaction: reactions.userReaction,
+                comment_count: 0
             };
         }
+
+        return {
+            ...post,
+            reactions: {
+                upvotes: reactions.upvotes,
+                downvotes: reactions.downvotes
+            },
+            userReaction: reactions.userReaction,
+            comment_count: commentCount || 0
+        };
     }));
+}
+
+// Replace the existing addReactionsToPosts function with this one
+async function addReactionsToPosts(posts, userId) {
+    if (!posts?.length) return [];
+    return addPostDetails(posts, userId);
 }
 
 // Helper function to get sort query based on parameters
