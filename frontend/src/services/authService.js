@@ -114,7 +114,7 @@ export const authService = {
 
     async updatePassword(oldPassword, newPassword) {
         try {
-            const response = await api.post('/api/auth/update-password', {
+            const response = await api.post(ENDPOINTS.AUTH.UPDATE_PASSWORD, {
                 oldPassword,
                 newPassword
             });
